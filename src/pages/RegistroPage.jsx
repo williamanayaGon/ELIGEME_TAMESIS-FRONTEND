@@ -114,7 +114,7 @@ export default function RegistroPage() {
   // --- CARGAR EPS AL INICIAR ---
   useEffect(() => {
     // CAMBIA LA URL SI ES NECESARIO (ej: https://tuhost.railway.app)
-    const API_URL = 'http://localhost:3000'; 
+    const API_URL = import.meta.env.VITE_API_URL + ''; 
     
     fetch(`${API_URL}/api/eps-list`)
       .then(res => res.json())
@@ -190,7 +190,7 @@ export default function RegistroPage() {
 
     try {
       // URL DEL BACKEND (Asegúrate que coincida)
-      const res = await fetch('http://localhost:3000/api/caregivers', {
+      const res = await fetch(import.meta.env.VITE_API_URL + '/api/caregivers', {
         method: 'POST',
         body: dataToSend
       });

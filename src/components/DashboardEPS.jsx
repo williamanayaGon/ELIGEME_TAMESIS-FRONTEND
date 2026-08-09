@@ -373,7 +373,7 @@ const [newProData, setNewProData] = useState({
         fetch(`http://localhost:3000/api/professionals${queryParams}`),
         fetch(`http://localhost:3000/api/logs${queryParams}`),
         fetch(`http://localhost:3000/api/visits${queryParams}`),
-        fetch('http://localhost:3000/api/financial-reports')
+        fetch(import.meta.env.VITE_API_URL + '/api/financial-reports')
       ]);
 
       // 3. Guardado seguro (Verificamos que las funciones set existan)
@@ -548,7 +548,7 @@ const handleCreatePatient = async (e) => {
     };
 
     try {
-      const res = await fetch('http://localhost:3000/api/patients', {
+      const res = await fetch(import.meta.env.VITE_API_URL + '/api/patients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -574,7 +574,7 @@ const handleCreatePatient = async (e) => {
     
 
     try {
-      const res = await fetch('http://localhost:3000/api/patients', { 
+      const res = await fetch(import.meta.env.VITE_API_URL + '/api/patients', { 
         method: 'POST', 
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(payload)
@@ -640,7 +640,7 @@ const handleCreateProfessional = async (e) => {
     if (newProData.fileHistory) formData.append('fileHistory', newProData.fileHistory);
 
     try {
-        const res = await fetch('http://localhost:3000/api/professionals', {
+        const res = await fetch(import.meta.env.VITE_API_URL + '/api/professionals', {
             method: 'POST',
             body: formData // Eliminamos los headers de 'Content-Type' para que el navegador fije el 'multipart/form-data' automáticamente
         });
@@ -680,7 +680,7 @@ const handleCreateProfessional = async (e) => {
       e.preventDefault();
       try {
           const payload = { ...financialData, totalExecuted: totalExecuted, balance: balance };
-          const res = await fetch('http://localhost:3000/api/financial-reports', {
+          const res = await fetch(import.meta.env.VITE_API_URL + '/api/financial-reports', {
               method: 'POST',
               headers: {'Content-Type': 'application/json'},
               body: JSON.stringify(payload)

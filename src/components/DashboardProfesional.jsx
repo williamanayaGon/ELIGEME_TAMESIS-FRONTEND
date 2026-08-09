@@ -121,7 +121,7 @@ export default function DashboardProfesional({ user, onLogout }) {
       }
 
       // Cargar visitas (Esto lo dejamos igual, o podrías filtrarlas también si el backend lo permite)
-      const resV = await fetch('http://localhost:3000/api/visits');
+      const resV = await fetch(import.meta.env.VITE_API_URL + '/api/visits');
       const dataV = await resV.json();
       
       const today = new Date().toLocaleDateString(); // Ojo: asegúrate que coincida formato con backend
@@ -199,7 +199,7 @@ if (sigPadRef.current && !sigPadRef.current.isEmpty()) {
       }
 
       try {
-          const res = await fetch('http://localhost:3000/api/visits', {
+          const res = await fetch(import.meta.env.VITE_API_URL + '/api/visits', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

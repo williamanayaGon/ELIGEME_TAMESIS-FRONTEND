@@ -25,7 +25,7 @@ export default function CaregiverModal({ onClose }) {
     }
 
     try {
-      const res = await fetch('http://localhost:3000/api/postulations/create', {
+      const res = await fetch(import.meta.env.VITE_API_URL + '/api/postulations/create', {
         method: 'POST',
         // OJO: Cuando usamos FormData, NO ponemos el header 'Content-Type': 'application/json'
         // El navegador lo pone automático.

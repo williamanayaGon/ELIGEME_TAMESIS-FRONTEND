@@ -51,7 +51,7 @@ export default function DashboardPaciente({ user, onLogout }) {
     if (!pendingVisitId) return toast.info("No tienes visitas pendientes por calificar");
 
     try {
-      const res = await fetch('http://localhost:3000/api/visits/evaluation', {
+      const res = await fetch(import.meta.env.VITE_API_URL + '/api/visits/evaluation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visitId: pendingVisitId, rating, comments: evalComments })
@@ -79,7 +79,7 @@ export default function DashboardPaciente({ user, onLogout }) {
     
     try {
       // ⚠️ Requiere backend: Tu ruta exacta de IA
-      const res = await fetch('http://localhost:3000/api/ai-assistant', {
+      const res = await fetch(import.meta.env.VITE_API_URL + '/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: aiPrompt, message: aiPrompt, userType: 'patient' })

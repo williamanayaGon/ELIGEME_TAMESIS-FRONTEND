@@ -50,7 +50,7 @@ export default function DashboardCuidador({ user, onLogout }) {
       if (!dataPrivacyAccepted) return toast.error("Debes aceptar la política de tratamiento de datos.");
 
       try {
-          const res = await fetch('http://localhost:3000/api/visits/evaluation', {
+          const res = await fetch(import.meta.env.VITE_API_URL + '/api/visits/evaluation', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ visitId: visitorToEvaluate.visitId, caregiverId: user.id, rating, comments: evalComments, dataPrivacyAccepted })
@@ -95,7 +95,7 @@ export default function DashboardCuidador({ user, onLogout }) {
 
       try {
           // Llamar a tu backend
-          const res = await fetch('http://localhost:3000/api/ai-assistant', {
+          const res = await fetch(import.meta.env.VITE_API_URL + '/api/ai-assistant', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ message: userText })
@@ -245,7 +245,7 @@ const fetchData = async () => {
     }
 
     try {
-        const res = await fetch('http://localhost:3000/api/logs', {
+        const res = await fetch(import.meta.env.VITE_API_URL + '/api/logs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
