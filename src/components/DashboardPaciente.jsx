@@ -29,7 +29,7 @@ export default function DashboardPaciente({ user, onLogout }) {
   const fetchPatientData = async () => {
     try {
       // 1. Cargar las bitácoras usando la ruta que compartiste
-      const resLogs = await fetch(`http://localhost:3000/api/logs?patientId=${user.id}`);
+      const resLogs = await fetch(`${import.meta.env.VITE_API_URL}/api/logs?patientId=${user.id}`);
       
       if (resLogs.ok) {
         const logsData = await resLogs.json();

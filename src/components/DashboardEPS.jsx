@@ -80,7 +80,7 @@ const ApplicantDetailModal = ({ isOpen, onClose, candidate, onAction }) => {
     const cleanPath = path.includes(',') ? path.split(',').pop() : path;
     const trimmedPath = cleanPath.trim();
     const finalPath = trimmedPath.startsWith('/') ? trimmedPath : `/${trimmedPath}`;
-    return `http://localhost:3000${finalPath}`;
+    return `${import.meta.env.VITE_API_URL}${finalPath}`;
   };
 
   const Show = ({ label, val }) => (
@@ -368,11 +368,11 @@ const [newProData, setNewProData] = useState({
 
       // 2. Peticiones (Usamos rutas completas por seguridad)
       const [resP, resC, resPro, resL, resV, resF] = await Promise.all([
-        fetch(`http://localhost:3000/api/patients${queryParams}`),
-        fetch(`http://localhost:3000/api/caregivers${queryParams}`),
-        fetch(`http://localhost:3000/api/professionals${queryParams}`),
-        fetch(`http://localhost:3000/api/logs${queryParams}`),
-        fetch(`http://localhost:3000/api/visits${queryParams}`),
+        fetch(`${import.meta.env.VITE_API_URL}/api/patients${queryParams}`),
+        fetch(`${import.meta.env.VITE_API_URL}/api/caregivers${queryParams}`),
+        fetch(`${import.meta.env.VITE_API_URL}/api/professionals${queryParams}`),
+        fetch(`${import.meta.env.VITE_API_URL}/api/logs${queryParams}`),
+        fetch(`${import.meta.env.VITE_API_URL}/api/visits${queryParams}`),
         fetch(import.meta.env.VITE_API_URL + '/api/financial-reports')
       ]);
 
@@ -501,7 +501,7 @@ const handleViewLogs = (persona) => {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/caregivers/${id}/status`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/caregivers/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -608,7 +608,7 @@ const handleCreatePatient = async (e) => {
   const handleAssignPatient = async (patientId) => {
     if (!caregiverToAssign) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/patients/${patientId}/assign`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/patients/${patientId}/assign`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ caregiverId: caregiverToAssign.id })
@@ -997,7 +997,7 @@ const handleCreateProfessional = async (e) => {
                            {/* Lógica para ver el archivo PDF cargado */}
                            {user.senaFile ? (
                                <a 
-                                 href={`http://localhost:3000${user.senaFile.includes(',') ? user.senaFile.split(',').pop() : user.senaFile}`} 
+                                 href={`${import.meta.env.VITE_API_URL}${user.senaFile.includes(',') ? user.senaFile.split(',').pop() : user.senaFile}`}
                                  target="_blank" 
                                  rel="noreferrer" 
                                  className="inline-flex items-center gap-2 text-blue-600 font-bold hover:text-blue-800 underline bg-blue-50 px-3 py-1 rounded transition"
@@ -1299,7 +1299,7 @@ const handleCreateProfessional = async (e) => {
                     <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                         <h3 className="font-bold text-yellow-800 mb-2">📂 Documentos</h3>
                         {selectedCaregiver.senaFile ? selectedCaregiver.senaFile.split(',').map((f,i)=> (
-                            <a key={i} href={`http://localhost:3000/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="block text-blue-600 underline text-sm mb-1">Documento {i+1}</a>
+                            <a key={i} href={`${import.meta.env.VITE_API_URL}/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="block text-blue-600 underline text-sm mb-1">Documento {i+1}</a>
                         )) : <p className="text-gray-400 text-sm">Sin documentos.</p>}
                     </div>
                     {selectedCaregiver.status === 'PENDIENTE' && (
@@ -1835,7 +1835,7 @@ const handleCreateProfessional = async (e) => {
         <div className="flex flex-col gap-1 mt-1">
             {/* AQUÍ ESTÁ EL ARREGLO: selectedPro?.resumeFile */}
             {selectedPro?.resumeFile ? (
-                <a href={`http://localhost:3000/uploads/${selectedPro.resumeFile}`} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-bold hover:underline">📄 Ver Hoja de Vida</a>
+                <a href={`${import.meta.env.VITE_API_URL}/uploads/${selectedPro.resumeFile}`} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-bold hover:underline">📄 Ver Hoja de Vida</a>
             ) : <span className="text-xs text-gray-400">Sin Hoja de Vida</span>}
         </div>
     </div>

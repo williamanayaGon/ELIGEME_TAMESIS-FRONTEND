@@ -7,7 +7,7 @@ export default function DetalleCuidador() {
     const [data, setData] = useState(null);
 
     useEffect(() => {
-        fetch(`http://localhost:3000/api/postulations/${id}`)
+        fetch(`${import.meta.env.VITE_API_URL}/api/postulations/${id}`)
             .then(res => res.json())
             .then(setData)
             .catch(() => toast.error("Error al cargar datos"));
@@ -18,7 +18,7 @@ export default function DetalleCuidador() {
     // Convertir ruta relativa a URL completa del backend
     // Backend guarda "uploads/archivo.pdf", necesitamos "http://localhost:3000/uploads/archivo.pdf"
     const fileUrl = data.certificateUrl 
-        ? `http://localhost:3000/${data.certificateUrl}` 
+        ? `${import.meta.env.VITE_API_URL}/${data.certificateUrl}`
         : null;
 
     return (

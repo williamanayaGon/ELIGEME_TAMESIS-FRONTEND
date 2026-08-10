@@ -18,7 +18,7 @@ export default function DashboardCuidador({ user, onLogout }) {
         formData.append('certificate', file);
 
         try {
-            const res = await fetch(`http://localhost:3000/api/upload-certificate/${myid}`, {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/upload-certificate/${myid}`, {
                 method: 'POST',
                 body: formData
             });

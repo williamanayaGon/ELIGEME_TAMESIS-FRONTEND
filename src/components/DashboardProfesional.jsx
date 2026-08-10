@@ -63,7 +63,7 @@ export default function DashboardProfesional({ user, onLogout }) {
       setSavingLogId(logId);
       try {
           // Asumiendo que tu endpoint para actualizar la bitácora soporta PATCH o PUT
-          const res = await fetch(`http://localhost:3000/api/logs/${logId}`, {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/logs/${logId}`, {
               method: 'PATCH', 
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -113,7 +113,7 @@ export default function DashboardProfesional({ user, onLogout }) {
     try {
       // CAMBIO IMPORTANTE AQUÍ: 
       // Agregamos ?epsId=... para decirle al backend "Dame los pacientes de MI jefe (EPS)"
-      const resP = await fetch(`http://localhost:3000/api/patients?epsId=${user.epsId}`);
+      const resP = await fetch(`${import.meta.env.VITE_API_URL}/api/patients?epsId=${user.epsId}`);
       
       if (resP.ok) {
         const dataP = await resP.json();
@@ -173,7 +173,7 @@ export default function DashboardProfesional({ user, onLogout }) {
       // CARGAR BITÁCORAS DEL CUIDADOR PARA ESTE PACIENTE
       setLoadingLogs(true);
       try {
-          const res = await fetch(`http://localhost:3000/api/logs?patientId=${patient.id}`);
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/logs?patientId=${patient.id}`);
           const logs = await res.json();
           setCaregiverLogs(Array.isArray(logs) ? logs : []);
       } catch (error) {

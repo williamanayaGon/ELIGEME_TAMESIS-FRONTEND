@@ -157,19 +157,19 @@ const fetchData = async () => {
     setLoading(true);
     try {
       // 1. Traer datos del paciente
-      const resP = await fetch(`http://localhost:3000/api/patients?caregiverId=${user.id}`);
+      const resP = await fetch(`${import.meta.env.VITE_API_URL}/api/patients?caregiverId=${user.id}`);
       const dataP = await resP.json();
       if (Array.isArray(dataP) && dataP.length > 0) setPatient(dataP[0]);
       else if (dataP && !Array.isArray(dataP)) setPatient(dataP);
       else setPatient(null);
 
       // 2. Traer el historial de bitácoras
-      const resL = await fetch(`http://localhost:3000/api/logs?caregiverId=${user.id}`);
+      const resL = await fetch(`${import.meta.env.VITE_API_URL}/api/logs?caregiverId=${user.id}`);
       const dataL = await resL.json();
       setLogs(Array.isArray(dataL) ? dataL : []);
 
       // 👇 3. NUEVO: Preguntar si hay visitas pendientes de calificar
-      const resV = await fetch(`http://localhost:3000/api/visits/pending-evaluation/${user.id}`);
+      const resV = await fetch(`${import.meta.env.VITE_API_URL}/api/visits/pending-evaluation/${user.id}`);
       const pendingEval = await resV.json();
       
       // Si el backend devuelve algo, activamos el aviso en pantalla
@@ -211,7 +211,7 @@ const fetchData = async () => {
 
       try {
           setUploading(true);
-          const res = await fetch(`http://localhost:3000/api/upload-certificate/${user.id}`, {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/upload-certificate/${user.id}`, {
               method: 'POST',
               body: uploadData
           });

@@ -93,7 +93,7 @@ export default function DashboardSuperintendencia({ user, onLogout }) {
   const fetchPatients = async (epsId) => {
     try {
      
-        const res = await fetch(`http://localhost:3000/api/patients?epsId=${epsId}`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/patients?epsId=${epsId}`);
         if(res.ok) {
             const data = await res.json();
             setPatients(data);
@@ -110,7 +110,7 @@ export default function DashboardSuperintendencia({ user, onLogout }) {
 
   const fetchStaff = async (epsId, roleType) => {
     try {
-        const res = await fetch(`http://localhost:3000/api/users?epsId=${epsId}&role=${roleType}`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users?epsId=${epsId}&role=${roleType}`);
         if(res.ok) {
              const data = await res.json();
              setStaff(data);
@@ -125,7 +125,7 @@ export default function DashboardSuperintendencia({ user, onLogout }) {
 
   const fetchLogs = async (patientId) => {
     try {
-        const res = await fetch(`http://localhost:3000/api/logs?patientId=${patientId}`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/logs?patientId=${patientId}`);
         if(res.ok) {
             const data = await res.json();
             setLogs(data);
