@@ -11,6 +11,7 @@ import {
 } from 'react-icons/md';
 import SignatureCanvas from 'react-signature-canvas';
 import { useRef } from 'react';
+import { apiFetch } from '../lib/api';
 
 
 
@@ -50,7 +51,7 @@ export default function DashboardCuidador({ user, onLogout }) {
       if (!dataPrivacyAccepted) return toast.error("Debes aceptar la política de tratamiento de datos.");
 
       try {
-          const res = await fetch(import.meta.env.VITE_API_URL + '/api/visits/evaluation', {
+          const res = await apiFetch('/api/visits/evaluation', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ visitId: visitorToEvaluate.visitId, caregiverId: user.id, rating, comments: evalComments, dataPrivacyAccepted })
@@ -95,7 +96,7 @@ export default function DashboardCuidador({ user, onLogout }) {
 
       try {
           // Llamar a tu backend
-          const res = await fetch(import.meta.env.VITE_API_URL + '/api/ai-assistant', {
+          const res = await apiFetch('/api/ai-assistant', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ message: userText })
@@ -157,19 +158,19 @@ const fetchData = async () => {
     setLoading(true);
     try {
       // 1. Traer datos del paciente
-      const resP = await fetch(`${import.meta.env.VITE_API_URL}/api/patients?caregiverId=${user.id}`);
+      const resP = await apiFetch(`/api/patients?caregiverId=${user.id}`);
       const dataP = await resP.json();
       if (Array.isArray(dataP) && dataP.length > 0) setPatient(dataP[0]);
       else if (dataP && !Array.isArray(dataP)) setPatient(dataP);
       else setPatient(null);
 
       // 2. Traer el historial de bitácoras
-      const resL = await fetch(`${import.meta.env.VITE_API_URL}/api/logs?caregiverId=${user.id}`);
+      const resL = await apiFetch(`/api/logs?caregiverId=${user.id}`);
       const dataL = await resL.json();
       setLogs(Array.isArray(dataL) ? dataL : []);
 
       // 👇 3. NUEVO: Preguntar si hay visitas pendientes de calificar
-      const resV = await fetch(`${import.meta.env.VITE_API_URL}/api/visits/pending-evaluation/${user.id}`);
+      const resV = await apiFetch(`/api/visits/pending-evaluation/${user.id}`);
       const pendingEval = await resV.json();
       
       // Si el backend devuelve algo, activamos el aviso en pantalla
@@ -211,7 +212,7 @@ const fetchData = async () => {
 
       try {
           setUploading(true);
-          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/upload-certificate/${user.id}`, {
+          const res = await apiFetch(`/api/upload-certificate/${user.id}`, {
               method: 'POST',
               body: uploadData
           });
@@ -245,7 +246,7 @@ const fetchData = async () => {
     }
 
     try {
-        const res = await fetch(import.meta.env.VITE_API_URL + '/api/logs', {
+        const res = await apiFetch('/api/logs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

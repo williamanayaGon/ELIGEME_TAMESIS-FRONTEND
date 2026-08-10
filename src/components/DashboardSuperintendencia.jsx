@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line 
 } from 'recharts';
 import { toast } from 'sonner';
+import { apiFetch } from '../lib/api';
 
 // --- PREGUNTAS DE AUDITORÍA (LISTA COMPLETA ORIGINAL) ---
 const AUDIT_QUESTIONS = [
@@ -93,7 +94,7 @@ export default function DashboardSuperintendencia({ user, onLogout }) {
   const fetchPatients = async (epsId) => {
     try {
      
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/patients?epsId=${epsId}`);
+        const res = await apiFetch(`/api/patients?epsId=${epsId}`);
         if(res.ok) {
             const data = await res.json();
             setPatients(data);
@@ -110,7 +111,7 @@ export default function DashboardSuperintendencia({ user, onLogout }) {
 
   const fetchStaff = async (epsId, roleType) => {
     try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users?epsId=${epsId}&role=${roleType}`);
+        const res = await apiFetch(`/api/users?epsId=${epsId}&role=${roleType}`);
         if(res.ok) {
              const data = await res.json();
              setStaff(data);
@@ -125,7 +126,7 @@ export default function DashboardSuperintendencia({ user, onLogout }) {
 
   const fetchLogs = async (patientId) => {
     try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/logs?patientId=${patientId}`);
+        const res = await apiFetch(`/api/logs?patientId=${patientId}`);
         if(res.ok) {
             const data = await res.json();
             setLogs(data);
