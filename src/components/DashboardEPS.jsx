@@ -13,13 +13,14 @@ import {
 
 // --- IMPORTACIONES DE ICONOS ---
 import { MdStar } from 'react-icons/md';
-import { 
-  MdPerson, MdSchool, MdLocalHospital, MdFolderOpen, MdBadge, 
+import {
+  MdPerson, MdSchool, MdLocalHospital, MdFolderOpen, MdBadge,
   MdAssignment, MdGavel, MdCheckCircle, MdWarning, MdEmojiEvents,
-  MdBarChart, MdMail, MdHealthAndSafety, MdAttachMoney, MdSearch, 
-  MdRefresh, MdElderly, MdRemoveRedEye, MdCalendarToday, MdMedication, 
-  MdShower, MdRestaurant, MdEditNote, MdPrint, MdClose, MdMedicalServices 
+  MdBarChart, MdMail, MdHealthAndSafety, MdAttachMoney, MdSearch,
+  MdRefresh, MdElderly, MdRemoveRedEye, MdCalendarToday, MdMedication,
+  MdShower, MdRestaurant, MdEditNote, MdPrint, MdClose, MdMedicalServices
 } from 'react-icons/md';
+import { apiFetch, fileUrl } from '../lib/api';
 // --- CONSTANTES GLOBALES ---
 const EXPENSE_CATEGORIES = [
     "CUIDADORES",
@@ -75,13 +76,8 @@ const TAMESIS_ZONES = {
 const ApplicantDetailModal = ({ isOpen, onClose, candidate, onAction }) => {
   if (!isOpen || !candidate) return null;
 
-  const getUrl = (path) => {
-    if (!path) return null;
-    const cleanPath = path.includes(',') ? path.split(',').pop() : path;
-    const trimmedPath = cleanPath.trim();
-    const finalPath = trimmedPath.startsWith('/') ? trimmedPath : `/${trimmedPath}`;
-    return `${import.meta.env.VITE_API_URL}${finalPath}`;
-  };
+  // fileUrl normaliza la ruta y adjunta el token: /uploads exige sesión.
+  const getUrl = (path) => fileUrl(path);
 
   const Show = ({ label, val }) => (
     <div className="mb-3">
@@ -326,6 +322,10 @@ const [newProData, setNewProData] = useState({
   const [selectedProVisits, setSelectedProVisits] = useState([]);
   const [selectedProName, setSelectedProName] = useState('');
 
+  // --- MODALES DE DETALLE DE LOS KPI DE ESTADÍSTICAS ---
+  const [showComplianceDetail, setShowComplianceDetail] = useState(false);
+  const [showVisitsDetail, setShowVisitsDetail] = useState(false);
+
   // --- ESTADOS PARA MODALES FINANCIEROS ---
   const [showFinancialForm, setShowFinancialForm] = useState(false);
   const [showFinancialView, setShowFinancialView] = useState(false);
@@ -368,12 +368,12 @@ const [newProData, setNewProData] = useState({
 
       // 2. Peticiones (Usamos rutas completas por seguridad)
       const [resP, resC, resPro, resL, resV, resF] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/api/patients${queryParams}`),
-        fetch(`${import.meta.env.VITE_API_URL}/api/caregivers${queryParams}`),
-        fetch(`${import.meta.env.VITE_API_URL}/api/professionals${queryParams}`),
-        fetch(`${import.meta.env.VITE_API_URL}/api/logs${queryParams}`),
-        fetch(`${import.meta.env.VITE_API_URL}/api/visits${queryParams}`),
-        fetch(import.meta.env.VITE_API_URL + '/api/financial-reports')
+        apiFetch(`/api/patients${queryParams}`),
+        apiFetch(`/api/caregivers${queryParams}`),
+        apiFetch(`/api/professionals${queryParams}`),
+        apiFetch(`/api/logs${queryParams}`),
+        apiFetch(`/api/visits${queryParams}`),
+        apiFetch('/api/financial-reports')
       ]);
 
       // 3. Guardado seguro (Verificamos que las funciones set existan)
@@ -477,6 +477,149 @@ useEffect(() => {
   const stats = getStats();
 
   // ==============================================================================
+  // 2.b DETALLE DE LOS KPI (lo que se abre al hacer clic en los recuadros)
+  // ==============================================================================
+
+  // Umbral a partir del cual se considera que un cuidador cumple.
+  const UMBRAL_CUMPLIMIENTO = 80;
+
+  // Clave local YYYY-MM-DD. Comparar así evita que el desfase UTC
+  // mueva una bitácora al día anterior o siguiente.
+  const dayKey = (value) => {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // Los últimos N días, del más antiguo al más reciente.
+  const buildDayWindow = (days) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return Array.from({ length: days }, (_, i) => {
+      const d = new Date(hoy);
+      d.setDate(d.getDate() - (days - 1 - i));
+      return {
+        key: dayKey(d),
+        label: d.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', ''),
+        dayNum: d.getDate()
+      };
+    });
+  };
+
+  // Quién está cumpliendo con las bitácoras y quién no, en los últimos 7 días.
+  const getLogComplianceDetail = () => {
+    const ventana = buildDayWindow(7);
+    const clavesVentana = new Set(ventana.map(d => d.key));
+
+    // Solo se evalúa a los cuidadores que tienen pacientes a cargo.
+    const porCuidador = new Map();
+    patients.filter(p => p.caregiverId).forEach(p => {
+      if (!porCuidador.has(p.caregiverId)) porCuidador.set(p.caregiverId, []);
+      porCuidador.get(p.caregiverId).push(p);
+    });
+
+    // Un paciente/día cuenta una sola vez aunque haya varias bitácoras.
+    const reportados = new Set();
+    logs.forEach(l => {
+      const k = dayKey(l.date);
+      if (k && clavesVentana.has(k)) reportados.add(`${l.patientId}|${k}`);
+    });
+
+    const filas = [...porCuidador.entries()].map(([caregiverId, susPacientes]) => {
+      const cuidador = caregivers.find(c => c.id === caregiverId);
+
+      const dias = ventana.map(d => {
+        const cubiertos = susPacientes.filter(p => reportados.has(`${p.id}|${d.key}`)).length;
+        return { ...d, cubiertos, total: susPacientes.length, completo: cubiertos === susPacientes.length };
+      });
+
+      const esperado = susPacientes.length * 7;
+      const registradas = dias.reduce((acc, d) => acc + d.cubiertos, 0);
+      const percent = esperado > 0 ? Math.round((registradas / esperado) * 100) : 0;
+
+      return {
+        caregiverId,
+        name: cuidador?.fullName || `Cuidador #${caregiverId}`,
+        identification: cuidador?.identification || '—',
+        pacientes: susPacientes,
+        dias, registradas, esperado, percent
+      };
+    });
+
+    // Los incumplidos primero: es lo que la EPS necesita accionar.
+    filas.sort((a, b) => a.percent - b.percent);
+
+    return {
+      ventana,
+      filas,
+      cumplen: filas.filter(f => f.percent >= UMBRAL_CUMPLIMIENTO),
+      incumplen: filas.filter(f => f.percent < UMBRAL_CUMPLIMIENTO)
+    };
+  };
+
+  // Total de visitas realizadas, por profesional y estado por paciente.
+  const getVisitsDetail = () => {
+    // Misma ventana móvil que usa el KPI de la tarjeta.
+    const limite = new Date();
+    limite.setDate(limite.getDate() - 5);
+
+    const porProfesional = new Map();
+    visits.forEach(v => {
+      if (!porProfesional.has(v.professionalId)) {
+        porProfesional.set(v.professionalId, { total: 0, recientes: 0, ultima: null });
+      }
+      const item = porProfesional.get(v.professionalId);
+      const d = new Date(v.date);
+      item.total++;
+      if (d >= limite) item.recientes++;
+      if (!item.ultima || d > item.ultima) item.ultima = d;
+    });
+
+    const filasPro = [...porProfesional.entries()]
+      .map(([id, datos]) => {
+        const pro = professionals.find(p => p.id === id);
+        return {
+          id,
+          name: pro?.fullName || `Profesional #${id}`,
+          position: pro?.position || 'Sin cargo registrado',
+          ...datos
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    const filasPaciente = patients
+      .map(p => {
+        const suyas = visits.filter(v => v.patientId === p.id);
+        const ultima = suyas.reduce((max, v) => {
+          const d = new Date(v.date);
+          return !max || d > max ? d : max;
+        }, null);
+
+        return {
+          id: p.id,
+          name: p.fullName,
+          total: suyas.length,
+          recientes: suyas.filter(v => new Date(v.date) >= limite).length,
+          ultima,
+          alDia: Boolean(ultima && ultima >= limite),
+          diasSin: ultima ? Math.floor((Date.now() - ultima.getTime()) / 86400000) : null
+        };
+      })
+      .sort((a, b) => (a.alDia === b.alDia ? b.total - a.total : (a.alDia ? 1 : -1)));
+
+    return {
+      totalVisitas: visits.length,
+      totalRecientes: visits.filter(v => new Date(v.date) >= limite).length,
+      pacientesAlDia: filasPaciente.filter(p => p.alDia).length,
+      filasPro,
+      filasPaciente
+    };
+  };
+
+  const logDetail = getLogComplianceDetail();
+  const visitsDetail = getVisitsDetail();
+
+  // ==============================================================================
   // 2. TU USEEFFECT (SOLO LE AGREGAMOS LA DEPENDENCIA [user])
   // ==============================================================================
 
@@ -501,7 +644,7 @@ const handleViewLogs = (persona) => {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/caregivers/${id}/status`, {
+      const res = await apiFetch(`/api/caregivers/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -534,6 +677,7 @@ const handleCreatePatient = async (e) => {
     // 3. Estructura de datos a enviar
     const payload = {
       fullName: newPatientData.fullName,
+      identification: (newPatientData.identification || '').trim(), // Llave de auto-asignación
       email: newPatientData.email, // 👇 NUEVO: Se envía el correo del paciente
       age: parseInt(newPatientData.age), 
       address: newPatientData.address,
@@ -548,33 +692,7 @@ const handleCreatePatient = async (e) => {
     };
 
     try {
-      const res = await fetch(import.meta.env.VITE_API_URL + '/api/patients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        toast.success(`Paciente ${data.fullName} creado. Se envió el código de acceso a su correo.`);
-        
-        // Limpiamos el formulario (ajusta según tus estados iniciales)
-        setNewPatientData(initialPatientState || {});
-        setIsModalOpen(false); // Cierra el modal si aplica
-        fetchData(); // Recarga la lista de pacientes
-      } else {
-        toast.error("Error al crear paciente: " + (data.error || "Datos incompletos"));
-      }
-    } catch (error) {
-      console.error("Error al crear paciente:", error);
-      toast.error("Error de conexión al guardar el paciente");
-    }
-
-    
-
-    try {
-      const res = await fetch(import.meta.env.VITE_API_URL + '/api/patients', { 
+      const res = await apiFetch('/api/patients', { 
         method: 'POST', 
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(payload)
@@ -587,9 +705,10 @@ const handleCreatePatient = async (e) => {
         setShowPatientForm(false);
         
         // Limpiar formulario
-        setNewPatientData({ 
-            fullName: '', age: '', stratum: '', diagnosis: '', 
-            address: '', contactPhone: '', careInstructions: '' 
+        setNewPatientData({
+            fullName: '', identification: '', email: '', age: '', stratum: '', diagnosis: '',
+            address: '', contactPhone: '', careInstructions: '', zoneCategory: '', zoneDetail: '',
+            fileHistory: null
         });
         
         // Recargar la lista
@@ -608,7 +727,7 @@ const handleCreatePatient = async (e) => {
   const handleAssignPatient = async (patientId) => {
     if (!caregiverToAssign) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/patients/${patientId}/assign`, {
+      const res = await apiFetch(`/api/patients/${patientId}/assign`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ caregiverId: caregiverToAssign.id })
@@ -640,7 +759,7 @@ const handleCreateProfessional = async (e) => {
     if (newProData.fileHistory) formData.append('fileHistory', newProData.fileHistory);
 
     try {
-        const res = await fetch(import.meta.env.VITE_API_URL + '/api/professionals', {
+        const res = await apiFetch('/api/professionals', {
             method: 'POST',
             body: formData // Eliminamos los headers de 'Content-Type' para que el navegador fije el 'multipart/form-data' automáticamente
         });
@@ -680,7 +799,7 @@ const handleCreateProfessional = async (e) => {
       e.preventDefault();
       try {
           const payload = { ...financialData, totalExecuted: totalExecuted, balance: balance };
-          const res = await fetch(import.meta.env.VITE_API_URL + '/api/financial-reports', {
+          const res = await apiFetch('/api/financial-reports', {
               method: 'POST',
               headers: {'Content-Type': 'application/json'},
               body: JSON.stringify(payload)
@@ -836,16 +955,28 @@ const handleCreateProfessional = async (e) => {
                         <p className="text-3xl font-bold text-green-600">{stats.coveragePercent}%</p>
                         <p className="text-xs text-gray-400">Pacientes asignados</p>
                     </div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-yellow-500">
+                    <button
+                        type="button"
+                        onClick={() => setShowComplianceDetail(true)}
+                        className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-yellow-500 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    >
                         <p className="text-gray-500 text-xs font-bold uppercase">Bitácoras (7 días)</p>
                         <p className={`text-3xl font-bold ${stats.logCompliance >= 80 ? 'text-green-600' : 'text-yellow-600'}`}>{stats.logCompliance}%</p>
-                        <p className="text-xs text-gray-400">Cumplimiento Diario</p>
-                    </div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500">
+                        <p className="text-xs text-blue-600 font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
+                            Ver quién cumple <span>→</span>
+                        </p>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowVisitsDetail(true)}
+                        className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    >
                         <p className="text-gray-500 text-xs font-bold uppercase">Visitas (5 días)</p>
                         <p className={`text-3xl font-bold ${stats.visitOpportunity >= 90 ? 'text-green-600' : 'text-purple-600'}`}>{stats.visitOpportunity}%</p>
-                        <p className="text-xs text-gray-400">Oportunidad Médica</p>
-                    </div>
+                        <p className="text-xs text-blue-600 font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
+                            Ver total de visitas <span>→</span>
+                        </p>
+                    </button>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -946,6 +1077,255 @@ const handleCreateProfessional = async (e) => {
                          </div>
                     </div>
                 </div>
+
+                {/* ============================================================ */}
+                {/* MODAL: DETALLE DE BITÁCORAS (7 DÍAS)                         */}
+                {/* ============================================================ */}
+                {showComplianceDetail && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                        <div className="bg-white w-full max-w-5xl h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+
+                            <div className="bg-yellow-500 text-white px-6 py-4 flex justify-between items-center shrink-0">
+                                <div>
+                                    <h3 className="text-xl font-bold flex items-center gap-2">
+                                        <MdEditNote className="text-2xl" /> Cumplimiento de Bitácoras
+                                    </h3>
+                                    <p className="text-yellow-50 text-sm">
+                                        Últimos 7 días · se exige una bitácora diaria por paciente asignado
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowComplianceDetail(false)} className="text-white/70 hover:text-white text-3xl leading-none">
+                                    <MdClose />
+                                </button>
+                            </div>
+
+                            {/* Resumen */}
+                            <div className="grid grid-cols-3 gap-px bg-gray-200 shrink-0">
+                                <div className="bg-white p-4 text-center">
+                                    <p className="text-2xl font-bold text-gray-800">{logDetail.filas.length}</p>
+                                    <p className="text-xs text-gray-500 uppercase font-bold">Cuidadores evaluados</p>
+                                </div>
+                                <div className="bg-white p-4 text-center">
+                                    <p className="text-2xl font-bold text-green-600">{logDetail.cumplen.length}</p>
+                                    <p className="text-xs text-gray-500 uppercase font-bold">Cumplen (≥{UMBRAL_CUMPLIMIENTO}%)</p>
+                                </div>
+                                <div className="bg-white p-4 text-center">
+                                    <p className="text-2xl font-bold text-red-600">{logDetail.incumplen.length}</p>
+                                    <p className="text-xs text-gray-500 uppercase font-bold">No cumplen</p>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-auto p-6 bg-gray-50">
+                                {logDetail.filas.length === 0 ? (
+                                    <div className="text-center py-16 text-gray-400">
+                                        <p className="font-medium">No hay cuidadores con pacientes asignados.</p>
+                                        <p className="text-sm mt-1">Asigna pacientes para poder medir el cumplimiento.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {logDetail.filas.map(fila => {
+                                            const cumple = fila.percent >= UMBRAL_CUMPLIMIENTO;
+                                            return (
+                                                <div
+                                                    key={fila.caregiverId}
+                                                    className={`bg-white rounded-xl border-l-4 p-4 shadow-sm ${cumple ? 'border-green-500' : 'border-red-500'}`}
+                                                >
+                                                    <div className="flex flex-wrap justify-between items-start gap-4">
+                                                        <div className="min-w-0">
+                                                            <p className="font-bold text-gray-800 flex items-center gap-2">
+                                                                {cumple
+                                                                    ? <MdCheckCircle className="text-green-500 shrink-0" />
+                                                                    : <MdWarning className="text-red-500 shrink-0" />}
+                                                                {fila.name}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 mt-0.5">
+                                                                C.C. {fila.identification} · {fila.pacientes.length} paciente(s): {fila.pacientes.map(p => p.fullName).join(', ')}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="text-right shrink-0">
+                                                            <p className={`text-2xl font-bold ${cumple ? 'text-green-600' : 'text-red-600'}`}>
+                                                                {fila.percent}%
+                                                            </p>
+                                                            <p className="text-xs text-gray-500">
+                                                                {fila.registradas} de {fila.esperado} bitácoras
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Semáforo día por día */}
+                                                    <div className="flex gap-1.5 mt-3">
+                                                        {fila.dias.map(d => (
+                                                            <div key={d.key} className="flex-1 text-center" title={`${d.cubiertos} de ${d.total} bitácoras`}>
+                                                                <div
+                                                                    className={`h-8 rounded flex items-center justify-center text-xs font-bold ${
+                                                                        d.completo
+                                                                            ? 'bg-green-500 text-white'
+                                                                            : d.cubiertos > 0
+                                                                                ? 'bg-yellow-400 text-yellow-900'
+                                                                                : 'bg-gray-200 text-gray-400'
+                                                                    }`}
+                                                                >
+                                                                    {d.cubiertos}/{d.total}
+                                                                </div>
+                                                                <p className="text-[10px] text-gray-400 mt-1 capitalize">{d.label} {d.dayNum}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="border-t bg-white px-6 py-3 flex justify-between items-center shrink-0 text-xs text-gray-500">
+                                <div className="flex gap-4">
+                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-500 inline-block"></span> Día completo</span>
+                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-400 inline-block"></span> Parcial</span>
+                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-200 inline-block"></span> Sin bitácora</span>
+                                </div>
+                                <button onClick={() => setShowComplianceDetail(false)} className="bg-gray-800 text-white px-5 py-2 rounded-lg font-bold hover:bg-gray-900 transition">
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ============================================================ */}
+                {/* MODAL: DETALLE DE VISITAS (5 DÍAS)                           */}
+                {/* ============================================================ */}
+                {showVisitsDetail && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                        <div className="bg-white w-full max-w-5xl h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+
+                            <div className="bg-purple-600 text-white px-6 py-4 flex justify-between items-center shrink-0">
+                                <div>
+                                    <h3 className="text-xl font-bold flex items-center gap-2">
+                                        <MdMedicalServices className="text-2xl" /> Total de Visitas Realizadas
+                                    </h3>
+                                    <p className="text-purple-100 text-sm">
+                                        Oportunidad médica medida sobre una ventana de 5 días
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowVisitsDetail(false)} className="text-white/70 hover:text-white text-3xl leading-none">
+                                    <MdClose />
+                                </button>
+                            </div>
+
+                            {/* Resumen */}
+                            <div className="grid grid-cols-3 gap-px bg-gray-200 shrink-0">
+                                <div className="bg-white p-4 text-center">
+                                    <p className="text-2xl font-bold text-gray-800">{visitsDetail.totalVisitas}</p>
+                                    <p className="text-xs text-gray-500 uppercase font-bold">Visitas históricas</p>
+                                </div>
+                                <div className="bg-white p-4 text-center">
+                                    <p className="text-2xl font-bold text-purple-600">{visitsDetail.totalRecientes}</p>
+                                    <p className="text-xs text-gray-500 uppercase font-bold">En los últimos 5 días</p>
+                                </div>
+                                <div className="bg-white p-4 text-center">
+                                    <p className="text-2xl font-bold text-green-600">
+                                        {visitsDetail.pacientesAlDia}/{patients.length}
+                                    </p>
+                                    <p className="text-xs text-gray-500 uppercase font-bold">Pacientes al día</p>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-auto p-6 bg-gray-50 space-y-8">
+
+                                {/* Visitas por profesional */}
+                                <div>
+                                    <h4 className="font-bold text-gray-800 mb-3">Visitas por profesional</h4>
+                                    {visitsDetail.filasPro.length === 0 ? (
+                                        <p className="text-gray-400 text-sm bg-white rounded-xl p-6 text-center">
+                                            Todavía no se ha registrado ninguna visita.
+                                        </p>
+                                    ) : (
+                                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                                                    <tr>
+                                                        <th className="text-left px-4 py-3 font-bold">Profesional</th>
+                                                        <th className="text-center px-4 py-3 font-bold">Total</th>
+                                                        <th className="text-center px-4 py-3 font-bold">Últimos 5 días</th>
+                                                        <th className="text-right px-4 py-3 font-bold">Última visita</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {visitsDetail.filasPro.map(pro => (
+                                                        <tr key={pro.id} className="hover:bg-gray-50">
+                                                            <td className="px-4 py-3">
+                                                                <p className="font-medium text-gray-800">{pro.name}</p>
+                                                                <p className="text-xs text-gray-400">{pro.position}</p>
+                                                            </td>
+                                                            <td className="text-center px-4 py-3 font-bold text-gray-800">{pro.total}</td>
+                                                            <td className="text-center px-4 py-3">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${pro.recientes > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`}>
+                                                                    {pro.recientes}
+                                                                </span>
+                                                            </td>
+                                                            <td className="text-right px-4 py-3 text-gray-500 text-xs">
+                                                                {pro.ultima ? pro.ultima.toLocaleDateString('es-CO') : '—'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Estado por paciente */}
+                                <div>
+                                    <h4 className="font-bold text-gray-800 mb-3">Estado por paciente</h4>
+                                    {visitsDetail.filasPaciente.length === 0 ? (
+                                        <p className="text-gray-400 text-sm bg-white rounded-xl p-6 text-center">
+                                            No hay pacientes registrados.
+                                        </p>
+                                    ) : (
+                                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                                                    <tr>
+                                                        <th className="text-left px-4 py-3 font-bold">Paciente</th>
+                                                        <th className="text-center px-4 py-3 font-bold">Visitas totales</th>
+                                                        <th className="text-right px-4 py-3 font-bold">Última visita</th>
+                                                        <th className="text-right px-4 py-3 font-bold">Estado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {visitsDetail.filasPaciente.map(p => (
+                                                        <tr key={p.id} className="hover:bg-gray-50">
+                                                            <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
+                                                            <td className="text-center px-4 py-3 font-bold text-gray-800">{p.total}</td>
+                                                            <td className="text-right px-4 py-3 text-gray-500 text-xs">
+                                                                {p.ultima
+                                                                    ? `${p.ultima.toLocaleDateString('es-CO')} (hace ${p.diasSin} d)`
+                                                                    : 'Nunca visitado'}
+                                                            </td>
+                                                            <td className="text-right px-4 py-3">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${p.alDia ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                    {p.alDia ? 'Al día' : 'Pendiente'}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="border-t bg-white px-6 py-3 flex justify-end shrink-0">
+                                <button onClick={() => setShowVisitsDetail(false)} className="bg-gray-800 text-white px-5 py-2 rounded-lg font-bold hover:bg-gray-900 transition">
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         )}
       {/* -------------------------------------------------------- */}
@@ -997,7 +1377,7 @@ const handleCreateProfessional = async (e) => {
                            {/* Lógica para ver el archivo PDF cargado */}
                            {user.senaFile ? (
                                <a 
-                                 href={`${import.meta.env.VITE_API_URL}${user.senaFile.includes(',') ? user.senaFile.split(',').pop() : user.senaFile}`}
+                                 href={fileUrl(user.senaFile)}
                                  target="_blank" 
                                  rel="noreferrer" 
                                  className="inline-flex items-center gap-2 text-blue-600 font-bold hover:text-blue-800 underline bg-blue-50 px-3 py-1 rounded transition"
@@ -1299,7 +1679,7 @@ const handleCreateProfessional = async (e) => {
                     <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                         <h3 className="font-bold text-yellow-800 mb-2">📂 Documentos</h3>
                         {selectedCaregiver.senaFile ? selectedCaregiver.senaFile.split(',').map((f,i)=> (
-                            <a key={i} href={`${import.meta.env.VITE_API_URL}/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="block text-blue-600 underline text-sm mb-1">Documento {i+1}</a>
+                            <a key={i} href={fileUrl(`/uploads/${f.trim()}`)} target="_blank" rel="noreferrer" className="block text-blue-600 underline text-sm mb-1">Documento {i+1}</a>
                         )) : <p className="text-gray-400 text-sm">Sin documentos.</p>}
                     </div>
                     {selectedCaregiver.status === 'PENDIENTE' && (
@@ -1532,13 +1912,27 @@ const handleCreateProfessional = async (e) => {
                         required
                       />
 
+                      {/* Cédula: es la llave con la que el sistema auto-asigna cuidadores */}
+                      <div>
+                        <input
+                          placeholder="Cédula del Paciente *"
+                          className="border w-full p-2 rounded bg-amber-50/40"
+                          value={newPatientData.identification || ''}
+                          onChange={e=>setNewPatientData({...newPatientData, identification:e.target.value})}
+                          required
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Con este documento el sistema asigna automáticamente al cuidador que lo registre en su postulación.
+                        </p>
+                      </div>
+
                       {/* 👇 CAMPO NUEVO Y OBLIGATORIO PARA ENVIAR CÓDIGO POR CORREO 👇 */}
-                      <input 
-                        type="email" 
-                        placeholder="Correo Electrónico (para enviarle su código de acceso) *" 
-                        className="border w-full p-2 rounded bg-blue-50/40" 
-                        value={newPatientData.email || ''} 
-                        onChange={e=>setNewPatientData({...newPatientData, email:e.target.value})} 
+                      <input
+                        type="email"
+                        placeholder="Correo Electrónico (para enviarle su código de acceso) *"
+                        className="border w-full p-2 rounded bg-blue-50/40"
+                        value={newPatientData.email || ''}
+                        onChange={e=>setNewPatientData({...newPatientData, email:e.target.value})}
                         required
                       />
                       
@@ -1835,7 +2229,7 @@ const handleCreateProfessional = async (e) => {
         <div className="flex flex-col gap-1 mt-1">
             {/* AQUÍ ESTÁ EL ARREGLO: selectedPro?.resumeFile */}
             {selectedPro?.resumeFile ? (
-                <a href={`${import.meta.env.VITE_API_URL}/uploads/${selectedPro.resumeFile}`} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-bold hover:underline">📄 Ver Hoja de Vida</a>
+                <a href={fileUrl(`/uploads/${selectedPro.resumeFile}`)} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-bold hover:underline">📄 Ver Hoja de Vida</a>
             ) : <span className="text-xs text-gray-400">Sin Hoja de Vida</span>}
         </div>
     </div>

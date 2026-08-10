@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiFetch } from '../lib/api';
 // import { toast } from 'sonner';
 
 export default function DashboardCuidador({ user, onLogout }) {
@@ -18,7 +19,7 @@ export default function DashboardCuidador({ user, onLogout }) {
         formData.append('certificate', file);
 
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/upload-certificate/${myid}`, {
+            const res = await apiFetch(`/api/upload-certificate/${myid}`, {
                 method: 'POST',
                 body: formData
             });

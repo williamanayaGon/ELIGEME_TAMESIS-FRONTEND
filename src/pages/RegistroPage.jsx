@@ -6,10 +6,18 @@ import { useNavigate } from 'react-router-dom';
 // =====================================================================
 // 1. COMPONENTE MODAL DE ÉXITO (Definido aquí para evitar errores)
 // =====================================================================
-const SuccessModal = ({ isOpen, type, onClose }) => {
+// Mensaje que explica por qué no se pudo asignar el paciente automáticamente.
+const ASSIGNMENT_ISSUES = {
+  NO_ENCONTRADO: "El documento del paciente aún no figura en nuestra base. La EPS lo registrará y validará tu postulación manualmente.",
+  OTRA_EPS: "El paciente está registrado en otra entidad. Tu postulación pasará a revisión manual.",
+  YA_TIENE_CUIDADOR: "Ese paciente ya tiene un cuidador asignado. Tu postulación pasará a revisión manual de la EPS."
+};
+
+const SuccessModal = ({ isOpen, type, onClose, autoAssigned, assignedPatientName, assignmentIssue }) => {
   if (!isOpen) return null;
 
   const isPreselected = type === 'PRESELECCIONADO';
+  const issueMessage = ASSIGNMENT_ISSUES[assignmentIssue];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-all">
@@ -38,11 +46,29 @@ const SuccessModal = ({ isOpen, type, onClose }) => {
         {/* Cuerpo del Modal */}
         <div className="p-8 text-center space-y-4">
           <p className="text-gray-600 text-lg leading-relaxed">
-            {isPreselected 
-              ? "Debido a la condición prioritaria del paciente, tu perfil ha sido aprobado automáticamente." 
+            {isPreselected
+              ? "Debido a la condición prioritaria del paciente, tu perfil ha sido aprobado automáticamente."
               : "Hemos recibido tu postulación correctamente. La EPS revisará tus documentos y te contactará pronto."}
           </p>
-          
+
+          {/* Resultado de la asignación automática */}
+          {autoAssigned && (
+            <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-left">
+              <p className="text-sm font-bold text-green-900 mb-1">✅ Paciente asignado automáticamente</p>
+              <p className="text-sm text-green-800">
+                La cédula que registraste coincide con el paciente{' '}
+                <strong>{assignedPatientName}</strong>, y quedó vinculado a tu perfil.
+              </p>
+            </div>
+          )}
+
+          {issueMessage && (
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-left">
+              <p className="text-sm font-bold text-amber-900 mb-1">ℹ️ Sobre la asignación del paciente</p>
+              <p className="text-sm text-amber-800">{issueMessage}</p>
+            </div>
+          )}
+
           {isPreselected && (
             <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
               <p className="text-sm text-blue-800 font-semibold">📧 Revisa tu correo electrónico para ver tus credenciales de acceso inmediato.</p>
@@ -78,6 +104,9 @@ export default function RegistroPage() {
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('NORMAL');
+  const [assignmentResult, setAssignmentResult] = useState({
+    autoAssigned: false, assignedPatientName: null, assignmentIssue: null
+  });
 
   // Formulario Completo
   const [formData, setFormData] = useState({
@@ -93,6 +122,10 @@ export default function RegistroPage() {
     
     // Datos Paciente (Solo Familiar)
     patientName: '', patientDoc: '', disabilityGrade: 'MODERADA', hasMedicalOrder: 'NO', diagnosis: '',
+
+    // Condición del paciente: si ambas son true y la cédula coincide con un
+    // paciente registrado, el sistema lo asigna automáticamente.
+    requiresHomeCare: false, isDisabled: false,
     
     // Relación y Servicio
     relationship: 'Familiar', careType: 'Diario', startDate: '',
@@ -204,6 +237,11 @@ export default function RegistroPage() {
         } else {
             setModalType('NORMAL');
         }
+        setAssignmentResult({
+            autoAssigned: Boolean(data.autoAssigned),
+            assignedPatientName: data.assignedPatientName || null,
+            assignmentIssue: data.assignmentIssue || null
+        });
         setShowModal(true); // Abrir el modal
       } else {
         toast.error("Error al registrar", { description: data.error || "Intenta nuevamente." });
@@ -223,7 +261,14 @@ export default function RegistroPage() {
     <div className="min-h-screen bg-gray-50 py-10 px-4 font-sans text-gray-800">
       
       {/* MODAL (Renderizado condicionalmente) */}
-      <SuccessModal isOpen={showModal} type={modalType} onClose={handleCloseModal} />
+      <SuccessModal
+        isOpen={showModal}
+        type={modalType}
+        onClose={handleCloseModal}
+        autoAssigned={assignmentResult.autoAssigned}
+        assignedPatientName={assignmentResult.assignedPatientName}
+        assignmentIssue={assignmentResult.assignmentIssue}
+      />
 
       {/* VISTA 1: SELECCIÓN DE TIPO Y REQUISITOS */}
       {step === 'REQUISITOS' && (
@@ -409,6 +454,58 @@ export default function RegistroPage() {
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase">Documento Paciente *</label>
                                 <input name="patientDoc" onChange={handleChange} className="w-full p-3 border border-gray-300 rounded-lg bg-white" required />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Si esta cédula corresponde a un paciente ya registrado, el sistema podrá asignártelo automáticamente.
+                                </p>
+                            </div>
+
+                            {/* CONDICIÓN DEL PACIENTE (Disparadores de asignación automática) */}
+                            <div className="md:col-span-2 bg-white p-5 rounded-xl border-2 border-blue-200 space-y-3">
+                                <p className="text-xs font-bold text-blue-800 uppercase tracking-wide">
+                                    Condición del paciente
+                                </p>
+
+                                <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg hover:bg-blue-50 transition">
+                                    <input
+                                        type="checkbox"
+                                        name="requiresHomeCare"
+                                        checked={formData.requiresHomeCare}
+                                        onChange={handleChange}
+                                        className="mt-0.5 w-5 h-5 text-blue-600 rounded"
+                                    />
+                                    <span className="text-sm">
+                                        <strong className="text-gray-800">El paciente requiere cuidado en casa</strong>
+                                        <span className="block text-gray-500 text-xs mt-0.5">
+                                            No puede desplazarse por sí solo y necesita atención domiciliaria permanente.
+                                        </span>
+                                    </span>
+                                </label>
+
+                                <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg hover:bg-blue-50 transition">
+                                    <input
+                                        type="checkbox"
+                                        name="isDisabled"
+                                        checked={formData.isDisabled}
+                                        onChange={handleChange}
+                                        className="mt-0.5 w-5 h-5 text-blue-600 rounded"
+                                    />
+                                    <span className="text-sm">
+                                        <strong className="text-gray-800">El paciente es una persona en situación de discapacidad</strong>
+                                        <span className="block text-gray-500 text-xs mt-0.5">
+                                            Cuenta con certificación o diagnóstico de discapacidad.
+                                        </span>
+                                    </span>
+                                </label>
+
+                                {formData.requiresHomeCare && formData.isDisabled && (
+                                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2 animate-fade-in">
+                                        <span className="text-lg leading-none">⚡</span>
+                                        <p className="text-xs text-green-800">
+                                            <strong>Asignación automática habilitada.</strong> Si el documento que ingresaste
+                                            coincide con un paciente registrado y disponible, quedarás vinculado a él de inmediato.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase">Grado Discapacidad *</label>

@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { apiFetch, fileUrl } from '../lib/api';
 
 export default function DetalleCuidador() {
     const { id } = useParams();
     const [data, setData] = useState(null);
 
     useEffect(() => {
-        fetch(`${import.meta.env.VITE_API_URL}/api/postulations/${id}`)
+        apiFetch(`/api/postulations/${id}`)
             .then(res => res.json())
             .then(setData)
             .catch(() => toast.error("Error al cargar datos"));
@@ -15,11 +16,9 @@ export default function DetalleCuidador() {
 
     if (!data) return <div className="text-white text-center mt-20">Cargando perfil...</div>;
 
-    // Convertir ruta relativa a URL completa del backend
-    // Backend guarda "uploads/archivo.pdf", necesitamos "http://localhost:3000/uploads/archivo.pdf"
-    const fileUrl = data.certificateUrl 
-        ? `${import.meta.env.VITE_API_URL}/${data.certificateUrl}`
-        : null;
+    // El backend guarda "uploads/archivo.pdf"; fileUrl la vuelve absoluta
+    // y le adjunta el token, que /uploads exige.
+    const certificadoUrl = fileUrl(data.certificateUrl);
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans pb-20">
@@ -57,9 +56,9 @@ export default function DetalleCuidador() {
                          <h2 className="text-xl font-bold mb-4 text-purple-700 border-b pb-2">Documentación</h2>
                          <p className="text-sm text-gray-600 mb-4">Hoja de vida y certificados adjuntos.</p>
                          
-                         {fileUrl ? (
-                             <a 
-                                href={fileUrl} 
+                         {certificadoUrl ? (
+                             <a
+                                href={certificadoUrl}
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="block w-full bg-red-50 text-red-600 border border-red-200 text-center py-3 rounded hover:bg-red-100 transition font-bold"

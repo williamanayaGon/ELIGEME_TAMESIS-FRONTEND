@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react'; 
-import { Toaster } from 'sonner'; 
+import { useState, useEffect } from 'react';
+import { Toaster } from 'sonner';
+import { getToken, getStoredUser, setSession, clearSession } from './lib/api';
 
 // Importación de Páginas
 import LandingPage from './pages/LandingPage';
@@ -20,20 +21,23 @@ function App() {
 
   // --- PERSISTENCIA DE SESIÓN ---
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    // Sin token la sesión no sirve: las rutas del panel responderían 401.
+    if (getToken()) {
+      const storedUser = getStoredUser();
+      if (storedUser) setUser(storedUser);
+    } else {
+      clearSession();
     }
   }, []);
 
-  const handleLogin = (userData) => {
+  const handleLogin = (userData, token) => {
     setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
+    setSession(token, userData);
   };
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('user');
+    clearSession();
   };
 
   return (

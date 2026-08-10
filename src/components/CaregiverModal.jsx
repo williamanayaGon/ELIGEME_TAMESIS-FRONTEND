@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiFetch } from '../lib/api';
 
 export default function CaregiverModal({ onClose }) {
   const [formData, setFormData] = useState({
@@ -25,7 +26,7 @@ export default function CaregiverModal({ onClose }) {
     }
 
     try {
-      const res = await fetch(import.meta.env.VITE_API_URL + '/api/postulations/create', {
+      const res = await apiFetch('/api/postulations/create', {
         method: 'POST',
         // OJO: Cuando usamos FormData, NO ponemos el header 'Content-Type': 'application/json'
         // El navegador lo pone automático.

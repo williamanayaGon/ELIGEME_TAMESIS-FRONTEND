@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 // Importamos los iconos de react-icons
 import { FaUserCircle, FaNotesMedical, FaStar, FaRobot, FaBell, FaTimes, FaSignOutAlt, FaCalendarPlus} from 'react-icons/fa';
+import { apiFetch } from '../lib/api';
 
 export default function DashboardPaciente({ user, onLogout }) {
   const [activeModal, setActiveModal] = useState(null); // 'HISTORIA', 'CALIFICAR', 'IA'
@@ -29,7 +30,7 @@ export default function DashboardPaciente({ user, onLogout }) {
   const fetchPatientData = async () => {
     try {
       // 1. Cargar las bitácoras usando la ruta que compartiste
-      const resLogs = await fetch(`${import.meta.env.VITE_API_URL}/api/logs?patientId=${user.id}`);
+      const resLogs = await apiFetch(`/api/logs?patientId=${user.id}`);
       
       if (resLogs.ok) {
         const logsData = await resLogs.json();
@@ -51,7 +52,7 @@ export default function DashboardPaciente({ user, onLogout }) {
     if (!pendingVisitId) return toast.info("No tienes visitas pendientes por calificar");
 
     try {
-      const res = await fetch(import.meta.env.VITE_API_URL + '/api/visits/evaluation', {
+      const res = await apiFetch('/api/visits/evaluation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visitId: pendingVisitId, rating, comments: evalComments })
@@ -79,7 +80,7 @@ export default function DashboardPaciente({ user, onLogout }) {
     
     try {
       // ⚠️ Requiere backend: Tu ruta exacta de IA
-      const res = await fetch(import.meta.env.VITE_API_URL + '/api/ai-assistant', {
+      const res = await apiFetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: aiPrompt, message: aiPrompt, userType: 'patient' })

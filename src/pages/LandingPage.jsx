@@ -25,7 +25,8 @@ export default function LandingPage({ onLoginSuccess }) {
       const data = await res.json();
 
       if (res.ok) {
-        onLoginSuccess(data);
+        // El backend responde { token, user }: se separan antes de guardar.
+        onLoginSuccess(data.user, data.token);
       } else {
         toast.error(data.error || 'Error de credenciales');
       }
