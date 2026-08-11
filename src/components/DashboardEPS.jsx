@@ -23,6 +23,7 @@ import {
 import { apiFetch, fileUrl } from '../lib/api';
 import ReportesFinancieros from './ReportesFinancieros';
 import EvidenciaFurag from './EvidenciaFurag';
+import CaracterizacionPrograma from './CaracterizacionPrograma';
 // --- CONSTANTES NUEVAS PARA ESTADÍSTICAS ---
 
 // Lista para que el gráfico de enfermedades salga limpio
@@ -865,6 +866,7 @@ const handleCreateProfessional = async (e) => {
             
             <TabBtn active={activeTab==='FINANCIERO'} onClick={()=>setActiveTab('FINANCIERO')} label="Reportes"  />
             <TabBtn active={activeTab==='FURAG'} onClick={()=>setActiveTab('FURAG')} label="Evidencia FURAG" icon={<MdGavel />}/>
+            <TabBtn active={activeTab==='PROGRAMA'} onClick={()=>setActiveTab('PROGRAMA')} label="Caracterización" icon={<MdElderly />}/>
           </div>
         </div>
       </header>
@@ -1517,6 +1519,10 @@ const handleCreateProfessional = async (e) => {
 
         {activeTab === 'FURAG' && (
             <EvidenciaFurag user={user} />
+        )}
+
+        {activeTab === 'PROGRAMA' && (
+            <CaracterizacionPrograma />
         )}
 
       </main>
