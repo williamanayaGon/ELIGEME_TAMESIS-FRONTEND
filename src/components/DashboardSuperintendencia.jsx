@@ -60,7 +60,7 @@ export default function DashboardSuperintendencia({ user, onLogout }) {
  
   const [notifications, setNotifications] = useState([
     { id: 1, type: 'financial', msg: 'Savia Salud: Reporte Financiero Mensual Cargado', time: 'Hace 10 min', unread: true },
-    { id: 2, type: 'financial', msg: 'Sura: Ajuste Presupuestal Q1', time: 'Hace 2 horas', unread: true }
+    { id: 2, type: 'financial', msg: 'Hospital: Ajuste Presupuestal Q1', time: 'Hace 2 horas', unread: true }
   ]);
 
   // --- CARGA DE EPS ---
@@ -69,7 +69,7 @@ export default function DashboardSuperintendencia({ user, onLogout }) {
     setEpsList([
         { id: 1, name: "Savia Salud EPS", nit: "900.200.123", region: "Antioquia", status: "activo" },
         { id: 2, name: "Saludcoop", nit: "800.150.999", region: "Nacional", status: "activo" },
-        { id: 3, name: "Sura EPS", nit: "890.900.555", region: "Nacional", status: "activo" }
+        { id: 3, name: "Hospital", nit: "890.900.555", region: "Antioquia", status: "activo" }
     ]);
   }, []);
 

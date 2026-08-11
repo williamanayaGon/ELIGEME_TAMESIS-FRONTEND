@@ -132,9 +132,10 @@ export default function CaracterizacionPrograma() {
     <div className="animate-fadeIn space-y-5">
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Caracterización del programa</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Reporte ADRES</h2>
           <p className="text-sm text-gray-500">
-            Retrato de a quién atiende el programa, con qué intensidad y con qué recursos.
+            Caracterización de la población atendida: a quién atiende el programa, con qué
+            intensidad y con qué recursos.
           </p>
         </div>
         <button onClick={descargarDossier}

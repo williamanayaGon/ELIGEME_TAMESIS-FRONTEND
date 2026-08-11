@@ -24,6 +24,29 @@ import { apiFetch, fileUrl } from '../lib/api';
 import ReportesFinancieros from './ReportesFinancieros';
 import EvidenciaFurag from './EvidenciaFurag';
 import CaracterizacionPrograma from './CaracterizacionPrograma';
+// Los tres reportes, con las imágenes que ya viven en public/.
+// El orden y los logos son los del diseño original.
+const REPORTES = [
+    {
+        id: 'ADRES',
+        titulo: 'ADRES',
+        descripcion: 'Caracterización de la población atendida',
+        imagen: '/logo1.png'
+    },
+    {
+        id: 'FURAG',
+        titulo: 'FURAG',
+        descripcion: 'Soportes de gestión para MIPG',
+        imagen: '/logo2.png'
+    },
+    {
+        id: 'FINANZAS',
+        titulo: 'FINANZAS',
+        descripcion: 'Ejecución del gasto por tipo',
+        imagen: '/logo3.png'
+    }
+];
+
 // --- CONSTANTES NUEVAS PARA ESTADÍSTICAS ---
 
 // Lista para que el gráfico de enfermedades salga limpio
@@ -315,6 +338,9 @@ const [newProData, setNewProData] = useState({
   // --- MODALES DE DETALLE DE LOS KPI DE ESTADÍSTICAS ---
   const [showComplianceDetail, setShowComplianceDetail] = useState(false);
   const [showVisitsDetail, setShowVisitsDetail] = useState(false);
+
+  // Cajón abierto dentro de Reportes: null muestra los tres.
+  const [reporteAbierto, setReporteAbierto] = useState(null);
 
 
 // ==============================================================================
@@ -864,9 +890,8 @@ const handleCreateProfessional = async (e) => {
             {/* AQUÍ ESTÁ LA CORRECCIÓN: Usando MdMedicalServices en lugar del anterior */}
             <TabBtn active={activeTab==='PROFESIONALES'} onClick={()=>setActiveTab('PROFESIONALES')} label="Profesionales" count={professionals.length} icon={<MdMedicalServices />}/>
             
-            <TabBtn active={activeTab==='FINANCIERO'} onClick={()=>setActiveTab('FINANCIERO')} label="Reportes"  />
-            <TabBtn active={activeTab==='FURAG'} onClick={()=>setActiveTab('FURAG')} label="Evidencia FURAG" icon={<MdGavel />}/>
-            <TabBtn active={activeTab==='PROGRAMA'} onClick={()=>setActiveTab('PROGRAMA')} label="Caracterización" icon={<MdElderly />}/>
+            {/* Los tres reportes viven dentro de esta pestaña, como cajones */}
+            <TabBtn active={activeTab==='FINANCIERO'} onClick={()=>{setActiveTab('FINANCIERO'); setReporteAbierto(null);}} label="Reportes" icon={<MdFolderOpen />}/>
           </div>
         </div>
       </header>
@@ -1514,15 +1539,51 @@ const handleCreateProfessional = async (e) => {
         {/* SECCIÓN 6: FINANCIERO                                    */}
         {/* -------------------------------------------------------- */}
         {activeTab === 'FINANCIERO' && (
-            <ReportesFinancieros user={user} />
-        )}
+            <div className="animate-fadeIn">
+                {/* Selector: tres cajones, uno por tipo de reporte */}
+                {!reporteAbierto && (
+                    <>
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold text-gray-800">Reportes</h2>
+                            <p className="text-sm text-gray-500">Elige el reporte que necesitas generar.</p>
+                        </div>
 
-        {activeTab === 'FURAG' && (
-            <EvidenciaFurag user={user} />
-        )}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {REPORTES.map(r => (
+                                <button
+                                    key={r.id}
+                                    onClick={() => setReporteAbierto(r.id)}
+                                    className="bg-white border-2 border-dashed border-blue-300 rounded-xl p-6 flex flex-col items-center justify-center text-blue-700 cursor-pointer hover:bg-blue-50 hover:border-blue-400 hover:shadow-md transition-all min-h-[280px] group"
+                                >
+                                    <img
+                                        src={r.imagen}
+                                        alt={r.titulo}
+                                        className="w-56 h-56 mb-3 object-contain group-hover:scale-105 transition-transform drop-shadow-sm"
+                                    />
+                                    <h3 className="font-bold text-lg text-gray-800">{r.titulo}</h3>
+                                    <p className="text-xs text-gray-500 mt-1 text-center px-2">{r.descripcion}</p>
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                )}
 
-        {activeTab === 'PROGRAMA' && (
-            <CaracterizacionPrograma />
+                {/* Módulo abierto, con vuelta a los cajones */}
+                {reporteAbierto && (
+                    <>
+                        <button
+                            onClick={() => setReporteAbierto(null)}
+                            className="text-gray-500 hover:text-blue-600 flex items-center gap-1 font-medium mb-4 transition"
+                        >
+                            ← Volver a Reportes
+                        </button>
+
+                        {reporteAbierto === 'FINANZAS' && <ReportesFinancieros user={user} />}
+                        {reporteAbierto === 'FURAG' && <EvidenciaFurag user={user} />}
+                        {reporteAbierto === 'ADRES' && <CaracterizacionPrograma />}
+                    </>
+                )}
+            </div>
         )}
 
       </main>
