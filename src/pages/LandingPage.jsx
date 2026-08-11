@@ -58,28 +58,24 @@ export default function LandingPage({ onLoginSuccess }) {
     setCredential('');
   };
 
+  // El color de fondo va en el contenedor raíz, no en una capa aparte.
+  // Antes vivía en un div `fixed -z-10`, que queda DETRÁS del fondo opaco
+  // del body: el azul no se pintaba nunca y la portada entera salía en
+  // blanco sobre blanco, con el texto invisible.
   return (
-    <div className="min-h-screen flex flex-col bg-ink-50">
+    <div className="relative min-h-screen flex flex-col bg-brand-900 overflow-hidden">
 
-      {/* Fondo compuesto: dos halos suaves sobre el azul institucional.
-          Cero peticiones de red. */}
-      <div aria-hidden="true" className="fixed inset-0 -z-10 bg-brand-900">
-        <div
-          className="absolute inset-0 opacity-70"
-          style={{
-            backgroundImage:
-              'radial-gradient(60rem 40rem at 15% 10%, #1f3c88 0%, transparent 60%),' +
-              'radial-gradient(45rem 35rem at 85% 90%, #2a4396 0%, transparent 55%)'
-          }}
-        />
-        <div
-          className="absolute inset-0 opacity-25"
-          style={{
-            backgroundImage:
-              'radial-gradient(30rem 24rem at 78% 18%, #ecb51f 0%, transparent 62%)'
-          }}
-        />
-      </div>
+      {/* Halos de marca. Cero peticiones de red. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            'radial-gradient(64rem 44rem at 12% 4%, #2c46cc 0%, transparent 58%),' +
+            'radial-gradient(50rem 38rem at 88% 92%, #3f5de6 0%, transparent 55%),' +
+            'radial-gradient(34rem 26rem at 80% 14%, rgba(247,181,0,.32) 0%, transparent 60%)'
+        }}
+      />
 
       <div className="relative flex flex-col min-h-screen on-brand">
 

@@ -12,7 +12,7 @@ import { apiFetch, apiDownload } from '../lib/api';
 
 // Un solo tono: las gráficas llevan una sola serie, así que el color
 // codifica magnitud, no identidad. Validado para contraste sobre claro.
-const AZUL = '#2a4396'; // brand-600, mismo hue de magnitud que el resto de gráficas
+const AZUL = '#2c46cc'; // brand-600, mismo hue de magnitud que el resto de gráficas
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const inicioAno = () => `${new Date().getFullYear()}-01-01`;

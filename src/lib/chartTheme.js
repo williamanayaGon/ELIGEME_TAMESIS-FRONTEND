@@ -21,19 +21,19 @@
 
 /** Rampa ordinal: estratos, grupos de edad, cualquier escala con orden. */
 export const RAMPA_ORDINAL = [
-  '#8ba3e0', // brand-300
-  '#5b78ce', // brand-400
-  '#3a55b0', // brand-500
-  '#2a4396', // brand-600
-  '#1a3070', // brand-800
-  '#0d1730'  // brand-950
+  '#93a9fc', // brand-300
+  '#6482f4', // brand-400
+  '#3f5de6', // brand-500
+  '#2c46cc', // brand-600
+  '#1d2c82', // brand-800
+  '#0d1435'  // brand-950
 ];
 
 /** Un solo tono para series nominales (patologías, conteos sin orden). */
-export const HUE_MAGNITUD = '#2a4396'; // brand-600 · 8.0:1 sobre blanco
+export const HUE_MAGNITUD = '#2c46cc'; // brand-600
 
 /** Pista de los medidores: mismo hue, paso claro. */
-export const PISTA_MEDIDOR = '#dae2f6'; // brand-100
+export const PISTA_MEDIDOR = '#dde5ff'; // brand-100
 
 export const TINTA = {
   eje: '#647085',      // ink-500 · 4.95:1

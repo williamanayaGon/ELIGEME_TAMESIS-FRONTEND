@@ -70,8 +70,8 @@ const RESPUESTAS_NO_CONFORMES = new Set(['No', 'No cumple', 'Parcial']);
 // Dos pasos del mismo azul: asignado frente a ejecutado es un antes/después
 // de la misma medida, no dos identidades. Ambos verificados sobre blanco
 // (4.2:1 y 9.4:1), por encima del mínimo de 3:1 para marcas.
-const COLOR_ASIGNADO = '#5b78ce';
-const COLOR_EJECUTADO = '#1a3070';
+const COLOR_ASIGNADO = '#6482f4';
+const COLOR_EJECUTADO = '#1d2c82';
 
 const pesos = (n) => new Intl.NumberFormat('es-CO', {
   style: 'currency', currency: 'COP', maximumFractionDigits: 0

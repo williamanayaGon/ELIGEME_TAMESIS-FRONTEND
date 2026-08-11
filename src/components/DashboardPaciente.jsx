@@ -72,7 +72,13 @@ export default function DashboardPaciente({ user, onLogout }) {
         const d = await resPending.json();
         // La ruta puede devolver una visita o una lista, según el caso.
         const pendiente = Array.isArray(d) ? d[0] : d;
-        setPendingVisit(pendiente && pendiente.id ? pendiente : null);
+
+        // Una visita se califica UNA sola vez. Si ya trae calificación,
+        // no se vuelve a ofrecer, aunque el servidor la siga devolviendo
+        // como pendiente.
+        const yaCalificada = Boolean(pendiente?.rating) && Number(pendiente.rating) > 0;
+
+        setPendingVisit(pendiente?.id && !yaCalificada ? pendiente : null);
       }
     } catch {
       toast.error('No se pudo conectar con el servidor. Revisa tu conexión.');

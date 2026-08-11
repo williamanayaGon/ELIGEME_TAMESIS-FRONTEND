@@ -28,6 +28,7 @@ import {
 import {
   RAMPA_ORDINAL, ejeX, ejeY, rejilla, tooltipEstilo, ANIM_MS
 } from '../lib/chartTheme';
+import { evaluarPrioridad, TONO_NIVEL } from '../lib/triage';
 
 // Los tres reportes, con las imágenes que ya viven en public/.
 const REPORTES = [
@@ -235,7 +236,7 @@ export default function DashboardEPS({ user, onLogout }) {
   const [logs, setLogs] = useState([]);
   const [professionals, setProfessionals] = useState([]);
   const [visits, setVisits] = useState([]);
-  const [financialReports, setFinancialReports] = useState([]);
+  const [umbralDias, setUmbralDias] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -280,13 +281,13 @@ export default function DashboardEPS({ user, onLogout }) {
       const myEpsId = storedUser.epsId || storedUser.id;
       const qs = myEpsId ? `?epsId=${myEpsId}` : '';
 
-      const [resP, resC, resPro, resL, resV, resF] = await Promise.all([
+      const [resP, resC, resPro, resL, resV, resU] = await Promise.all([
         apiFetch(`/api/patients${qs}`),
         apiFetch(`/api/caregivers${qs}`),
         apiFetch(`/api/professionals${qs}`),
         apiFetch(`/api/logs${qs}`),
         apiFetch(`/api/visits${qs}`),
-        apiFetch('/api/financial-reports')
+        apiFetch('/api/programa/umbral')
       ]);
 
       if (resP.ok)   { const d = await resP.json();   setPatients(Array.isArray(d) ? d : []); }
@@ -294,7 +295,7 @@ export default function DashboardEPS({ user, onLogout }) {
       if (resPro.ok) { const d = await resPro.json(); setProfessionals(Array.isArray(d) ? d : []); }
       if (resL.ok)   { const d = await resL.json();   setLogs(Array.isArray(d) ? d : []); }
       if (resV.ok)   { const d = await resV.json();   setVisits(Array.isArray(d) ? d : []); }
-      if (resF.ok)   { const d = await resF.json();   setFinancialReports(Array.isArray(d) ? d : []); }
+      if (resU.ok)   { const d = await resU.json();   if (typeof d?.dias === 'number') setUmbralDias(d.dias); }
 
     } catch {
       // Con señal intermitente esto pasa a diario. Se dice, no se esconde:
@@ -381,17 +382,56 @@ export default function DashboardEPS({ user, onLogout }) {
     });
     const conEdad = ageGroups.pediatrico + ageGroups.adulto + ageGroups.geriatrico;
 
-    const totalBudget = financialReports.reduce((a, c) => a + Number(c.totalBudget || 0), 0);
-    const totalExecuted = financialReports.reduce((a, c) => a + Number(c.totalExecuted || 0), 0);
-    const executionPercent = totalBudget > 0 ? Math.round((totalExecuted / totalBudget) * 100) : null;
-
     return {
       totalPatients, assigned, unassigned, coveragePercent,
       strataCounts, sortedDiagnoses, ageGroups, conEdad,
       recentLogs, expectedLogs, logCompliance,
-      patientsOnTime, visitOpportunity, executionPercent
+      patientsOnTime, visitOpportunity
     };
-  }, [patients, logs, visits, financialReports]);
+  }, [patients, logs, visits]);
+
+  /**
+   * Prioridad por paciente, con exactamente el mismo criterio que usa el
+   * panel del visitador médico: hallazgos registrados, diagnóstico, y el
+   * umbral de seguimiento que definió la entidad. Se calcula aquí para que
+   * la alcaldía vea la misma cola que ve el profesional en la calle, sin
+   * dos verdades distintas sobre el mismo paciente.
+   */
+  const prioridadPorPaciente = useMemo(() => {
+    const porPacienteLogs = new Map();
+    const porPacienteVisitas = new Map();
+
+    logs.forEach(l => {
+      if (!porPacienteLogs.has(l.patientId)) porPacienteLogs.set(l.patientId, []);
+      porPacienteLogs.get(l.patientId).push(l);
+    });
+    visits.forEach(v => {
+      if (!porPacienteVisitas.has(v.patientId)) porPacienteVisitas.set(v.patientId, []);
+      porPacienteVisitas.get(v.patientId).push(v);
+    });
+
+    const mapa = new Map();
+    patients.forEach(p => {
+      mapa.set(p.id, evaluarPrioridad(
+        p,
+        porPacienteLogs.get(p.id) || [],
+        porPacienteVisitas.get(p.id) || [],
+        {},
+        umbralDias
+      ));
+    });
+    return mapa;
+  }, [patients, logs, visits, umbralDias]);
+
+  /** La prioridad de un cuidador es la más alta entre sus pacientes. */
+  const prioridadDeCuidador = useCallback((caregiverId) => {
+    const suyos = patients.filter(p => String(p.caregiverId) === String(caregiverId));
+    if (suyos.length === 0) return null;
+    return suyos
+      .map(p => prioridadPorPaciente.get(p.id))
+      .filter(Boolean)
+      .sort((a, b) => b.orden - a.orden)[0] ?? null;
+  }, [patients, prioridadPorPaciente]);
 
   const stratumChartData = useMemo(
     () => [1, 2, 3, 4, 5, 6].map((level, i) => ({
@@ -913,16 +953,6 @@ export default function DashboardEPS({ user, onLogout }) {
                           </span>
                         </p>
                       )}
-                      {stats.executionPercent !== null && (
-                        <div className="pt-5 border-t border-ink-100">
-                          <Meter
-                            label="Ejecución presupuestal"
-                            value={stats.executionPercent}
-                            total={100}
-                            formula="Total ejecutado ÷ total asignado en los reportes financieros"
-                          />
-                        </div>
-                      )}
                     </CardBody>
                   </Card>
                 </div>
@@ -1085,7 +1115,30 @@ export default function DashboardEPS({ user, onLogout }) {
                           Paciente asignado
                         </p>
                         {assignedPatient ? (
-                          <p className="text-sm font-medium text-ink-900 mt-1.5">{assignedPatient.fullName}</p>
+                          <>
+                            <p className="text-sm font-medium text-ink-900 mt-1.5">{assignedPatient.fullName}</p>
+                            {/* Mismo semáforo que ve el visitador médico: la
+                                alcaldía y la calle miran la misma cola. */}
+                            {(() => {
+                              const pr = prioridadDeCuidador(caregiver.id);
+                              if (!pr) return null;
+                              return (
+                                <div className="mt-2.5">
+                                  <Badge
+                                    tone={TONO_NIVEL[pr.nivel]}
+                                    icon={pr.nivel === 'alta' ? <MdWarning /> : pr.atendida ? <MdCheckCircle /> : undefined}
+                                  >
+                                    {pr.etiqueta}
+                                  </Badge>
+                                  {pr.motivos[0] && (
+                                    <p className="text-xs text-ink-500 mt-1.5 leading-relaxed">
+                                      {pr.motivos[0].texto}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </>
                         ) : (
                           <Button
                             variant="secondary"
@@ -1150,7 +1203,7 @@ export default function DashboardEPS({ user, onLogout }) {
                     <Th>Estrato</Th>
                     <Th>Diagnóstico</Th>
                     <Th>Cuidador</Th>
-                    <Th>Estado</Th>
+                    <Th>Prioridad</Th>
                     <Th align="right">Acciones</Th>
                   </tr>
                 </thead>
@@ -1179,9 +1232,19 @@ export default function DashboardEPS({ user, onLogout }) {
                             : <SinRegistrar className="text-xs" />}
                         </Td>
                         <Td>
-                          <StatusDot tone={assigned ? 'ok' : 'warn'}>
-                            {assigned ? 'Cubierto' : 'Sin cuidador'}
-                          </StatusDot>
+                          {(() => {
+                            const pr = prioridadPorPaciente.get(p.id);
+                            if (!pr) return <SinRegistrar className="text-xs" />;
+                            return (
+                              <Badge
+                                tone={TONO_NIVEL[pr.nivel]}
+                                icon={pr.nivel === 'alta' ? <MdWarning /> : pr.atendida ? <MdCheckCircle /> : undefined}
+                                title={pr.motivos.map(m => m.texto).join(' · ')}
+                              >
+                                {pr.etiqueta}
+                              </Badge>
+                            );
+                          })()}
                         </Td>
                         <Td align="right">
                           <Button variant="secondary" size="sm" icon={<MdRemoveRedEye />} onClick={() => setSelectedPatient(p)}>
@@ -1393,13 +1456,17 @@ function NavTabs({ tabs, counts, active, onChange }) {
     refs.current[next.id]?.focus();
   };
 
+  // El scroll vive en el contenedor y la fila usa `w-max mx-auto`: así las
+  // pestañas quedan centradas cuando caben, y siguen desplazándose sin
+  // cortar la primera cuando no caben — que es lo que rompe poner
+  // `justify-center` directamente sobre un flex con overflow.
   return (
-    <div className="bg-white border-b border-ink-200">
+    <div className="bg-white border-b border-ink-200 overflow-x-auto">
       <div
         role="tablist"
         aria-label="Secciones del panel"
         onKeyDown={onKeyDown}
-        className="max-w-[1400px] mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto"
+        className="w-max mx-auto px-4 sm:px-6 flex gap-1"
       >
         {tabs.map(tab => {
           const isActive = active === tab.id;

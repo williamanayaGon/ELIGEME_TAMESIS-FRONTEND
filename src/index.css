@@ -31,33 +31,33 @@ html, body, #root {
      El 700 es el azul de la marca tal como ya vive en el código (#1f3c88).
      La rampa se construyó alrededor de ese ancla, no al revés.
      --------------------------------------------------------------------- */
-  --color-brand-50:  #eef2fb;
-  --color-brand-100: #dae2f6;
-  --color-brand-200: #b8c7ed;
-  --color-brand-300: #8ba3e0;
-  --color-brand-400: #5b78ce;
-  --color-brand-500: #3a55b0;
-  --color-brand-600: #2a4396;
-  --color-brand-700: #1f3c88;
-  --color-brand-800: #1a3070;
-  --color-brand-900: #15264f;
-  --color-brand-950: #0d1730;
+  --color-brand-50:  #eef2ff;
+  --color-brand-100: #dde5ff;
+  --color-brand-200: #bccbff;
+  --color-brand-300: #93a9fc;
+  --color-brand-400: #6482f4;
+  --color-brand-500: #3f5de6;
+  --color-brand-600: #2c46cc;
+  --color-brand-700: #2337a6;
+  --color-brand-800: #1d2c82;
+  --color-brand-900: #172158;
+  --color-brand-950: #0d1435;
 
   /* ---------------------------------------------------------------------
      Color · Amarillo ELÍGEME
      Es el color de la abeja y del acento histórico. Nunca como texto sobre
      blanco: siempre como superficie con tinta oscura encima, o como filete.
      --------------------------------------------------------------------- */
-  --color-accent-50:  #fdf8e7;
-  --color-accent-100: #faedc2;
-  --color-accent-200: #f5db85;
-  --color-accent-300: #f0c74a;
-  --color-accent-400: #ecb51f;
-  --color-accent-500: #d99e0b;
-  --color-accent-600: #b47c08;
-  --color-accent-700: #8a5a00;
-  --color-accent-800: #6b4600;
-  --color-accent-900: #4a3000;
+  --color-accent-50:  #fff8e1;
+  --color-accent-100: #ffefb8;
+  --color-accent-200: #ffe07a;
+  --color-accent-300: #ffcd33;
+  --color-accent-400: #f7b500;
+  --color-accent-500: #dd9c00;
+  --color-accent-600: #b87c00;
+  --color-accent-700: #8f5f00;
+  --color-accent-800: #6e4900;
+  --color-accent-900: #4b3100;
 
   /* ---------------------------------------------------------------------
      Color · Tinta (neutros fríos, para que asienten con el azul)
@@ -87,24 +87,24 @@ html, body, #root {
      Un tono por significado. Los tonos "-fg" están verificados sobre blanco
      y sobre su propia superficie "-soft".
      --------------------------------------------------------------------- */
-  --color-ok-soft:   #e7f4ec;
-  --color-ok-border: #b6ddc6;
-  --color-ok:        #157347;
-  --color-ok-strong: #0f5233;
+  --color-ok-soft:   #e1f7ea;
+  --color-ok-border: #9fdfb8;
+  --color-ok:        #0b8047;
+  --color-ok-strong: #0a6639;
 
-  --color-warn-soft:   #fdf3e0;
-  --color-warn-border: #f0d9a8;
-  --color-warn:        #8a5a00;
-  --color-warn-strong: #6b4600;
+  --color-warn-soft:   #fff4e0;
+  --color-warn-border: #f7d79a;
+  --color-warn:        #9a6200;
+  --color-warn-strong: #7a4d00;
 
-  --color-risk-soft:   #fdeceb;
-  --color-risk-border: #f4c2bf;
-  --color-risk:        #b3261e;
-  --color-risk-strong: #8c1c16;
+  --color-risk-soft:   #ffecea;
+  --color-risk-border: #ffbdb6;
+  --color-risk:        #cc2a1e;
+  --color-risk-strong: #9e1e15;
 
-  --color-info-soft:   #eef2fb;
-  --color-info-border: #b8c7ed;
-  --color-info:        #2a4396;
+  --color-info-soft:   #eef2ff;
+  --color-info-border: #bccbff;
+  --color-info:        #2c46cc;
 
   /* ---------------------------------------------------------------------
      Tipografía

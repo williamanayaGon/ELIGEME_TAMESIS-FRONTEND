@@ -114,9 +114,16 @@ export default function DashboardCuidador({ user, onLogout }) {
       if (resV.ok) {
         const d = await resV.json();
         const pendiente = Array.isArray(d) ? d[0] : d;
-        // Antes se guardaba la respuesta tal cual: un `{}` vacío es
-        // "verdadero" y encendía el aviso con el nombre en blanco.
-        setVisitorToEvaluate(pendiente && (pendiente.visitId || pendiente.id) ? pendiente : null);
+
+        // Dos guardas:
+        //  · un `{}` vacío es "verdadero" y encendía el aviso con el
+        //    nombre en blanco;
+        //  · una visita se califica UNA sola vez, así que si ya trae
+        //    calificación no se vuelve a ofrecer.
+        const tieneVisita = Boolean(pendiente?.visitId || pendiente?.id);
+        const yaCalificada = Boolean(pendiente?.rating) && Number(pendiente.rating) > 0;
+
+        setVisitorToEvaluate(tieneVisita && !yaCalificada ? pendiente : null);
       }
     } catch {
       toast.error('No se pudo conectar. Revisa tu señal e intenta de nuevo.');

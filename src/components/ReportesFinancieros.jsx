@@ -32,7 +32,7 @@ const COLOR_ESTADO = {
 
 // Un solo tono: la gráfica lleva una sola serie, así que el color codifica
 // magnitud, no identidad. Validado para contraste sobre fondo claro.
-const AZUL = '#2a4396'; // brand-600
+const AZUL = '#2c46cc'; // brand-600
 
 const money = (n) => new Intl.NumberFormat('es-CO', {
   style: 'currency', currency: 'COP', maximumFractionDigits: 0
