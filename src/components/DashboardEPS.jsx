@@ -21,19 +21,7 @@ import {
   MdShower, MdRestaurant, MdEditNote, MdPrint, MdClose, MdMedicalServices
 } from 'react-icons/md';
 import { apiFetch, fileUrl } from '../lib/api';
-// --- CONSTANTES GLOBALES ---
-const EXPENSE_CATEGORIES = [
-    "CUIDADORES",
-    "VISITADORES MÉDICOS (Médicos y enfermeros)",
-    "Medicamentos",
-    "Insumos y materiales médicos",
-    "Transporte y logística",
-    "Gastos administrativos",
-    "Tecnología y sistemas",
-    "Gastos legales / tutelas",
-    "Provisiones y ajustes"
-];
-
+import ReportesFinancieros from './ReportesFinancieros';
 // --- CONSTANTES NUEVAS PARA ESTADÍSTICAS ---
 
 // Lista para que el gráfico de enfermedades salga limpio
@@ -325,23 +313,6 @@ const [newProData, setNewProData] = useState({
   // --- MODALES DE DETALLE DE LOS KPI DE ESTADÍSTICAS ---
   const [showComplianceDetail, setShowComplianceDetail] = useState(false);
   const [showVisitsDetail, setShowVisitsDetail] = useState(false);
-
-  // --- ESTADOS PARA MODALES FINANCIEROS ---
-  const [showFinancialForm, setShowFinancialForm] = useState(false);
-  const [showFinancialView, setShowFinancialView] = useState(false);
-  const [selectedReport, setSelectedReport] = useState(null);
-
-  const initialFinancialData = {
-      period: '', 
-      epsName: 'ELIGEME SALUD EPS', 
-      responsible: user?.fullName || '', 
-      totalBudget: 0, 
-      expenses: EXPENSE_CATEGORIES.map(cat => ({ category: cat, value: 0, support: '', note: '' })),
-      generalObs: '', 
-      elaboratedBy: '', 
-      reviewedBy: ''
-  };
-  const [financialData, setFinancialData] = useState(initialFinancialData);
 
 
 // ==============================================================================
@@ -785,35 +756,9 @@ const handleCreateProfessional = async (e) => {
       setShowVisitsModal(true);
   };
 
-  // --- LÓGICA FINANCIERA ---
-  const totalExecuted = financialData.expenses.reduce((acc, curr) => acc + Number(curr.value || 0), 0);
-  const balance = Number(financialData.totalBudget || 0) - totalExecuted;
-
-  const handleExpenseChange = (index, field, value) => {
-      const newExpenses = [...financialData.expenses];
-      newExpenses[index][field] = value;
-      setFinancialData({ ...financialData, expenses: newExpenses });
-  };
-
-  const handleCreateFinancialReport = async (e) => {
-      e.preventDefault();
-      try {
-          const payload = { ...financialData, totalExecuted: totalExecuted, balance: balance };
-          const res = await apiFetch('/api/financial-reports', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify(payload)
-          });
-          if(res.ok) {
-              toast.success("Reporte Guardado");
-              setShowFinancialForm(false);
-              setFinancialData(initialFinancialData); 
-              fetchData();
-          } else {
-              toast.error("Error al guardar reporte");
-          }
-      } catch (e) { toast.error("Error de conexión"); }
-  };
+  // La lógica financiera vive ahora en ReportesFinancieros.jsx, que maneja
+  // reportes por tipo con líneas de gasto. Aquí solo se conserva la lista
+  // para el indicador de ejecución del tablero.
 
   const handlePrint = () => {
       const printContent = document.getElementById('printable-area');
@@ -1565,94 +1510,7 @@ const handleCreateProfessional = async (e) => {
         {/* SECCIÓN 6: FINANCIERO                                    */}
         {/* -------------------------------------------------------- */}
         {activeTab === 'FINANCIERO' && (
-            <div className="animate-fadeIn">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold text-gray-800">Reportes </h2>
-                    <button onClick={()=>setShowFinancialForm(true)} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700">+ Nuevo Reporte</button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    
-                    {/* --- NUEVO CAJÓN: GENERAR REPORTE --- */}
-<div 
-    onClick={() => setShowFinancialForm(true)}
-  
-    className="bg-blue-50/50 border-2 border-dashed border-blue-300 rounded-xl p-8 flex flex-col items-center justify-center text-blue-600 cursor-pointer hover:bg-blue-100 hover:border-blue-400 hover:shadow-sm transition-all min-h-[250px] group"
->
-    {/* AQUÍ ESTÁ LA IMAGEN MÁS GRANDE */}
-    <img 
-        src="/logo1.png" 
-        alt="Ícono de Finanzas" 
-     
-        className="w-80 h-80 mb-4 object-contain group-hover:scale-110 transition-transform drop-shadow-sm"
-    />
-    
-    <h3 className="font-bold text-lg">ADRES</h3>
-    <p className="text-xs text-blue-500 mt-1 text-center font-medium">Crear un nuevo reporte</p>
-</div>
-{/* ------------------------------------ */}
-{/* --- NUEVO CAJÓN: GENERAR REPORTE --- */}
-<div 
-  
-    className="bg-blue-50/50 border-2 border-dashed border-blue-300 rounded-xl p-6 flex flex-col items-center justify-center text-blue-600 cursor-pointer hover:bg-blue-100 hover:border-blue-400 hover:shadow-sm transition-all min-h-[250px] group"
->
-    {/* AQUÍ ESTÁ LA IMAGEN NUEVA */}
-    <img 
-        src="/logo2.png" 
-        alt="Ícono de Finanzas" 
-        className="w-80 h-80 mb-3 object-contain group-hover:scale-110 transition-transform drop-shadow-sm"
-    />
-    
-    <h3 className="font-bold text-lg">FURAG</h3>
-    <p className="text-xs text-blue-500 mt-1 text-center font-medium">Crear un nuevo reporte</p>
-</div>
-{/* ------------------------------------ */}
-{/* --- NUEVO CAJÓN: GENERAR REPORTE --- */}
-<div 
-    onClick={() => setShowFinancialForm(true)}
-    className="bg-blue-50/50 border-2 border-dashed border-blue-300 rounded-xl p-6 flex flex-col items-center justify-center text-blue-600 cursor-pointer hover:bg-blue-100 hover:border-blue-400 hover:shadow-sm transition-all min-h-[250px] group"
->
-    {/* AQUÍ ESTÁ LA IMAGEN NUEVA */}
-    <img 
-        src="/logo3.png" 
-        alt="Ícono de Finanzas" 
-        className="w-80 h-80 mb-3 object-contain group-hover:scale-110 transition-transform drop-shadow-sm"
-    />
-    
-    <h3 className="font-bold text-lg">FINANZAS</h3>
-    <p className="text-xs text-blue-500 mt-1 text-center font-medium">Crear un nuevo reporte</p>
-</div>
-{/* ------------------------------------ */}        
-                   
-                            
-
-
-
-
-
-                    {financialReports.length === 0 && (
-                        <div className="col-span-2 flex items-center justify-center border-2 border-dashed border-gray-200 rounded-xl text-gray-400 py-10 min-h-[250px]">
-                            Sin reportes financieros anteriores.
-                        </div>
-                    )}
-                    
-                    {financialReports.map(rep => (
-                        <div key={rep.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition relative min-h-[250px] flex flex-col justify-between">
-                            <div>
-                                <div className="absolute top-0 right-0 bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-bl-lg rounded-tr-xl">{rep.reference}</div>
-                                <h3 className="font-bold text-lg mb-1">{rep.period}</h3>
-                                <p className="text-xs text-gray-500 mb-4">Generado: {new Date(rep.date).toLocaleDateString()}</p>
-                                <div className="space-y-2 mb-4 bg-gray-50 p-3 rounded">
-                                    <div className="flex justify-between text-sm"><span className="text-gray-500">Presupuesto:</span><span className="font-bold">${Number(rep.totalBudget).toLocaleString()}</span></div>
-                                    <div className="flex justify-between text-sm"><span className="text-gray-500">Ejecutado:</span><span className="font-bold text-red-600">${Number(rep.totalExecuted).toLocaleString()}</span></div>
-                                    <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2"><span className="text-gray-500 font-bold">Saldo:</span><span className={`font-bold ${Number(rep.balance) >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Number(rep.balance).toLocaleString()}</span></div>
-                                </div>
-                            </div>
-                            <button onClick={() => { setSelectedReport(rep); setShowFinancialView(true); }} className="w-full bg-white text-gray-700 border border-gray-300 py-2 rounded font-bold hover:bg-gray-50 transition">Ver Detalle / Imprimir</button>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <ReportesFinancieros user={user} />
         )}
 
       </main>
@@ -2070,78 +1928,6 @@ const handleCreateProfessional = async (e) => {
     </div>
 )}
 
-      {/* MODAL FINANCIERO FORM */}
-      {showFinancialForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fadeIn">
-              <div className="bg-white rounded-xl w-full max-w-5xl h-[95vh] flex flex-col shadow-2xl overflow-hidden">
-                  <div className="bg-blue-800 text-white p-4 flex justify-between items-center"><h2 className="font-bold text-lg">Nuevo Reporte Financiero</h2><button onClick={()=>setShowFinancialForm(false)} className="text-white hover:text-red-300 text-2xl font-bold">✕</button></div>
-                  <form onSubmit={handleCreateFinancialReport} className="flex-1 overflow-y-auto p-8 bg-gray-50 space-y-6">
-                      <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div><label className="text-xs font-bold text-gray-400 uppercase">Periodo</label><input type="text" className="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none" required value={financialData.period} onChange={e=>setFinancialData({...financialData, period: e.target.value})} placeholder="Ej: Octubre 2023" /></div>
-                          <div><label className="text-xs font-bold text-gray-400 uppercase">EPS</label><input type="text" className="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-600" readOnly value={financialData.epsName} /></div>
-                          <div><label className="text-xs font-bold text-gray-400 uppercase">Responsable</label><input type="text" className="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-600" readOnly value={financialData.responsible} /></div>
-                      </div>
-                      <div className="bg-blue-50 p-5 rounded-lg border border-blue-100 shadow-sm">
-                          <h3 className="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2">PRESUPUESTO DEL PERIODO</h3>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              <div><label className="block text-sm font-bold text-gray-600 mb-1">Presupuesto Aprobado ($)</label><input type="number" className="w-full border p-3 rounded text-lg font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none" required value={financialData.totalBudget} onChange={e=>setFinancialData({...financialData, totalBudget: e.target.value})} placeholder="0" /></div>
-                              <div><label className="block text-sm font-bold text-gray-600 mb-1">Total Ejecutado</label><div className="w-full bg-white border border-gray-200 p-3 rounded text-lg font-bold text-red-600 shadow-inner">${totalExecuted.toLocaleString()}</div></div>
-                              <div><label className="block text-sm font-bold text-gray-600 mb-1">Saldo Disponible</label><div className={`w-full bg-white border border-gray-200 p-3 rounded text-lg font-bold shadow-inner ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>${balance.toLocaleString()}</div></div>
-                          </div>
-                      </div>
-                      <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                          <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">DETALLE DE EGRESOS</h3>
-                          <div className="space-y-4">
-                              {financialData.expenses.map((item, idx) => (
-                                  <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-100 pb-4 last:border-0 hover:bg-gray-50 transition p-2 rounded">
-                                      <div className="md:col-span-3"><p className="font-bold text-sm text-gray-700">{item.category}</p></div>
-                                      <div className="md:col-span-3"><input type="number" className="w-full border p-2 rounded font-mono focus:ring-1 focus:ring-blue-500 outline-none" placeholder="0" value={item.value} onChange={e => handleExpenseChange(idx, 'value', e.target.value)} /></div>
-                                      <div className="md:col-span-3"><input type="text" className="w-full border p-2 rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Factura / Ref" value={item.support} onChange={e => handleExpenseChange(idx, 'support', e.target.value)} /></div>
-                                      <div className="md:col-span-3"><input type="text" className="w-full border p-2 rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Observación" value={item.note} onChange={e => handleExpenseChange(idx, 'note', e.target.value)} /></div>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                      <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 space-y-4">
-                          <div><label className="font-bold text-sm text-gray-700">Observación General</label><textarea className="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none" rows="2" value={financialData.generalObs} onChange={e=>setFinancialData({...financialData, generalObs: e.target.value})}></textarea></div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                              <div><label className="text-xs font-bold text-gray-500 uppercase">Elaboró</label><input className="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none" value={financialData.elaboratedBy} onChange={e=>setFinancialData({...financialData, elaboratedBy: e.target.value})} /></div>
-                              <div><label className="text-xs font-bold text-gray-500 uppercase">Revisó</label><input className="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none" value={financialData.reviewedBy} onChange={e=>setFinancialData({...financialData, reviewedBy: e.target.value})} /></div>
-                          </div>
-                      </div>
-                  </form>
-                  <div className="p-4 bg-white border-t flex justify-end gap-3 z-10 shadow-lg">
-                      <button onClick={()=>setShowFinancialForm(false)} className="px-6 py-2 bg-gray-200 text-gray-700 font-bold rounded hover:bg-gray-300 transition">Cancelar</button>
-                      <button onClick={handleCreateFinancialReport} className="px-6 py-2 bg-blue-600 text-white font-bold rounded shadow hover:bg-blue-700 transition">Guardar Reporte</button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* MODAL VIEW PRINT */}
-      {showFinancialView && selectedReport && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-xl w-full max-w-4xl h-[95vh] flex flex-col shadow-2xl">
-                  <div className="bg-gray-800 text-white p-4 flex justify-between items-center">
-                      <h3 className="font-bold text-lg">Vista de Reporte</h3>
-                      <div className="flex gap-3">
-                          <button onClick={handlePrint} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded font-bold shadow transition flex items-center gap-2"><span>🖨️</span> Imprimir</button>
-                          <button onClick={()=>setShowFinancialView(false)} className="text-white hover:text-red-400 text-xl font-bold px-2">✕</button>
-                      </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-8 bg-gray-200">
-                      <div id="printable-area" className="bg-white p-12 shadow-lg mx-auto max-w-[21cm] min-h-[29.7cm] text-black box-border">
-                          <div className="text-center border-b-2 border-black pb-4 mb-6"><h1 className="text-2xl font-bold uppercase tracking-wider">REPORTE FINANCIERO EPS</h1><p className="text-sm mt-1">Ref: <strong>{selectedReport.reference}</strong></p></div>
-                          <div className="grid grid-cols-2 gap-4 mb-8 text-sm border-b border-gray-300 pb-6"><p><strong>Periodo:</strong> {selectedReport.period}</p><p><strong>EPS:</strong> {selectedReport.epsName}</p><p><strong>Responsable:</strong> {selectedReport.responsible}</p><p><strong>Fecha:</strong> {new Date(selectedReport.date).toLocaleDateString()}</p></div>
-                          <div className="mb-10"><h3 className="font-bold border-b border-black mb-3 text-sm uppercase">1. Resumen Presupuestal</h3><table className="w-full text-sm border-collapse border border-gray-400"><tbody><tr><td className="p-2 border border-gray-300 bg-gray-50 w-1/2">Presupuesto Total Aprobado:</td><td className="p-2 border border-gray-300 text-right font-bold text-base">${Number(selectedReport.totalBudget).toLocaleString()}</td></tr><tr><td className="p-2 border border-gray-300 bg-gray-50">Total Ejecutado:</td><td className="p-2 border border-gray-300 text-right font-bold text-red-600 text-base">${Number(selectedReport.totalExecuted).toLocaleString()}</td></tr><tr className="bg-gray-100"><td className="p-2 border border-gray-300 font-bold uppercase">Saldo Disponible:</td><td className="p-2 border border-gray-300 text-right font-bold text-lg text-black">${Number(selectedReport.balance).toLocaleString()}</td></tr></tbody></table></div>
-                          <div className="mb-10"><h3 className="font-bold border-b border-black mb-3 text-sm uppercase">2. Detalle de Egresos</h3><table className="w-full text-xs border-collapse border border-gray-400"><thead><tr className="bg-gray-200"><th className="border border-gray-400 p-2 text-left">Concepto</th><th className="border border-gray-400 p-2 text-right">Valor</th><th className="border border-gray-400 p-2 text-left">Soporte</th><th className="border border-gray-400 p-2 text-left">Nota</th></tr></thead><tbody>{JSON.parse(selectedReport.expensesData).map((ex, i) => (<tr key={i}><td className="border border-gray-300 p-2 font-medium">{ex.category}</td><td className="border border-gray-300 p-2 text-right">${Number(ex.value).toLocaleString()}</td><td className="border border-gray-300 p-2 text-gray-600">{ex.support || '-'}</td><td className="border border-gray-300 p-2 text-gray-600">{ex.note || '-'}</td></tr>))}</tbody></table></div>
-                          <div className="mb-12"><h3 className="font-bold border-b border-black mb-3 text-sm uppercase">3. Observación General</h3><div className="border border-gray-400 p-4 min-h-[80px] text-sm bg-gray-50 rounded">{selectedReport.generalObs || "Sin observaciones."}</div></div>
-                          <div className="grid grid-cols-2 gap-16 mt-20 text-center text-sm"><div className="flex flex-col items-center"><div className="border-b border-black w-full mb-2"></div><p className="font-bold uppercase">{selectedReport.elaboratedBy}</p><p className="text-gray-500">Elaboró</p></div><div className="flex flex-col items-center"><div className="border-b border-black w-full mb-2"></div><p className="font-bold uppercase">{selectedReport.reviewedBy}</p><p className="text-gray-500">Revisó y Aprobó</p></div></div>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
       {/* RENDERIZAR EL NUEVO MODAL DE DETALLE */}
       <ApplicantDetailModal 
          isOpen={showDetailModal}

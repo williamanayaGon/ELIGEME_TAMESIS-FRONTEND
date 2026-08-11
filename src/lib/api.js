@@ -52,6 +52,37 @@ export async function apiFetch(path, options = {}) {
 }
 
 /**
+ * Descarga un archivo generado por la API.
+ *
+ * No se puede usar un <a href> normal: estas rutas exigen el token en el
+ * encabezado. Se trae como blob y se dispara la descarga desde memoria.
+ */
+export async function apiDownload(path, nombreSugerido) {
+  const res = await apiFetch(path);
+
+  if (!res.ok) {
+    let mensaje = 'No se pudo generar el archivo.';
+    try { mensaje = (await res.json()).error || mensaje; } catch { /* respuesta binaria */ }
+    throw new Error(mensaje);
+  }
+
+  const blob = await res.blob();
+
+  // El servidor manda el nombre real en Content-Disposition.
+  const disp = res.headers.get('Content-Disposition') || '';
+  const enCabecera = disp.match(/filename="?([^"]+)"?/)?.[1];
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = enCabecera || nombreSugerido;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
  * URL de un archivo subido. El token va en el query string porque las
  * etiquetas <img> y los enlaces de descarga no envían encabezados.
  */
