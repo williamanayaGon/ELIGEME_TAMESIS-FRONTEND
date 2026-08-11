@@ -22,6 +22,7 @@ import {
 } from 'react-icons/md';
 import { apiFetch, fileUrl } from '../lib/api';
 import ReportesFinancieros from './ReportesFinancieros';
+import EvidenciaFurag from './EvidenciaFurag';
 // --- CONSTANTES NUEVAS PARA ESTADÍSTICAS ---
 
 // Lista para que el gráfico de enfermedades salga limpio
@@ -863,6 +864,7 @@ const handleCreateProfessional = async (e) => {
             <TabBtn active={activeTab==='PROFESIONALES'} onClick={()=>setActiveTab('PROFESIONALES')} label="Profesionales" count={professionals.length} icon={<MdMedicalServices />}/>
             
             <TabBtn active={activeTab==='FINANCIERO'} onClick={()=>setActiveTab('FINANCIERO')} label="Reportes"  />
+            <TabBtn active={activeTab==='FURAG'} onClick={()=>setActiveTab('FURAG')} label="Evidencia FURAG" icon={<MdGavel />}/>
           </div>
         </div>
       </header>
@@ -1511,6 +1513,10 @@ const handleCreateProfessional = async (e) => {
         {/* -------------------------------------------------------- */}
         {activeTab === 'FINANCIERO' && (
             <ReportesFinancieros user={user} />
+        )}
+
+        {activeTab === 'FURAG' && (
+            <EvidenciaFurag user={user} />
         )}
 
       </main>
