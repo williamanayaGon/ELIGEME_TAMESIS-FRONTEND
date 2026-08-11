@@ -116,7 +116,7 @@ export default function EvidenciaFurag({ user }) {
 
   // ===============================================================
   return (
-    <div className="animate-fadeIn space-y-5">
+    <div className="animate-fade space-y-5">
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Evidencia FURAG</h2>
@@ -149,7 +149,7 @@ export default function EvidenciaFurag({ user }) {
 
       {/* Alertas: solo vencimientos por fecha */}
       {alertas?.total > 0 && (
-        <div className="bg-white border-l-4 border-red-500 rounded-xl p-4 shadow-sm">
+        <div className="bg-risk-soft border border-risk-border rounded-lg p-4">
           <p className="font-bold text-gray-800 flex items-center gap-2">
             <MdWarning className="text-red-500" /> {alertas.total} asunto(s) por fecha
           </p>
@@ -204,7 +204,7 @@ export default function EvidenciaFurag({ user }) {
         ))}
       </div>
 
-      {cargando && <p className="text-center py-12 text-gray-400">Cargando…</p>}
+      {cargando && <p className="text-center py-12 text-ink-500">Cargando…</p>}
 
       {/* ---------------- INDICADORES ---------------- */}
       {!cargando && pestana === 'INDICADORES' && catalogo && (
@@ -222,7 +222,7 @@ export default function EvidenciaFurag({ user }) {
                     : <MdCheckCircle className="text-green-500 text-xl shrink-0" />}
                 </div>
 
-                <p className={`text-3xl font-bold mt-2 ${ind.sinDatos ? 'text-gray-400' : 'text-indigo-600'}`}>
+                <p className={`text-3xl font-bold mt-2 ${ind.sinDatos ? 'text-ink-500 italic' : 'text-ink-900'}`}>
                   {valorLegible(ind)}
                 </p>
 
@@ -234,7 +234,7 @@ export default function EvidenciaFurag({ user }) {
 
                 {/* La fórmula visible es lo que hace auditable el número */}
                 <p className="text-xs text-gray-500 mt-3 leading-relaxed">
-                  <span className="font-bold uppercase text-gray-400">Fórmula: </span>
+                  <span className="font-bold uppercase text-ink-500">Fórmula: </span>
                   {ind.formula}
                 </p>
 
@@ -287,7 +287,7 @@ export default function EvidenciaFurag({ user }) {
             <div className="bg-white rounded-xl border border-gray-200 text-center py-14">
               <MdFolderOpen className="text-5xl text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">Todavía no hay evidencias registradas.</p>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-sm text-ink-500 mt-1">
                 Genéralas desde la pestaña Indicadores o carga un documento externo.
               </p>
             </div>
@@ -300,7 +300,7 @@ export default function EvidenciaFurag({ user }) {
             ).map(([politica, lista]) => (
               <div key={politica} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <h3 className="font-bold text-gray-800 px-4 py-3 border-b bg-gray-50 text-sm">
-                  {politica} <span className="text-gray-400 font-normal">({lista.length})</span>
+                  {politica} <span className="text-ink-500 font-normal">({lista.length})</span>
                 </h3>
                 <div className="divide-y divide-gray-100">
                   {lista.map(ev => (
@@ -310,7 +310,7 @@ export default function EvidenciaFurag({ user }) {
                           {ev.nombre}
                           <span className={`text-xs px-2 py-0.5 rounded-full border font-bold ${
                             ev.origen === 'GENERADA'
-                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                              ? 'bg-brand-50 text-brand-700 border-brand-200'
                               : 'bg-gray-100 text-gray-600 border-gray-200'
                           }`}>{ev.origen}</span>
                           {ev.vencida && (
@@ -323,7 +323,7 @@ export default function EvidenciaFurag({ user }) {
                         {ev.valorGenerado && (
                           <p className="text-sm text-gray-700 mt-0.5">
                             Valor:{' '}
-                            <strong className={ev.valorGenerado.sinDatos ? 'text-gray-400' : 'text-indigo-600'}>
+                            <strong className={ev.valorGenerado.sinDatos ? 'text-ink-500' : 'text-brand-700'}>
                               {valorLegible({ ...ev.valorGenerado })}
                             </strong>
                           </p>
@@ -369,7 +369,7 @@ export default function EvidenciaFurag({ user }) {
             <div className="bg-white rounded-xl border border-gray-200 text-center py-14">
               <MdTrendingUp className="text-5xl text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">Sin acciones de mejora registradas.</p>
-              <p className="text-sm text-gray-400 mt-1 max-w-md mx-auto">
+              <p className="text-sm text-ink-500 mt-1 max-w-md mx-auto">
                 El sistema no infiere brechas: las describe quien conoce el proceso.
               </p>
             </div>
@@ -395,14 +395,14 @@ export default function EvidenciaFurag({ user }) {
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{a.politica}</td>
                       <td className="px-4 py-3 text-gray-600 text-xs">
-                        {a.responsable}<br /><span className="text-gray-400">{a.dependencia}</span>
+                        {a.responsable}<br /><span className="text-ink-500">{a.dependencia}</span>
                       </td>
                       <td className="px-4 py-3 text-center text-xs text-gray-600">{fmt(a.fechaObjetivo)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <input type="range" min="0" max="100" step="5" value={a.avance}
                             onChange={e => actualizarAvance(a, Number(e.target.value))}
-                            className="w-24 accent-indigo-600" />
+                            className="w-24 accent-brand-600" />
                           <span className="text-xs font-bold text-gray-700 w-9">{a.avance}%</span>
                         </div>
                       </td>

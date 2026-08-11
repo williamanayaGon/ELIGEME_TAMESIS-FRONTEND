@@ -1,33 +1,64 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Toaster } from 'sonner';
 import { getToken, getStoredUser, setSession, clearSession } from './lib/api';
 
-// Importación de Páginas
 import LandingPage from './pages/LandingPage';
-import RegistroPage from './pages/RegistroPage';
 
-// Importación de Paneles (Dashboards)
-import DashboardEPS from './components/DashboardEPS';
-import DashboardCuidador from './components/DashboardCuidador';
-import DashboardProfesional from './components/DashboardProfesional'; 
-import DashboardSuperintendencia from './components/DashboardSuperintendencia'; 
-// 👇 1. NUEVO: Importamos el panel del paciente 👇
-import DashboardPaciente from './components/DashboardPaciente'; 
+/**
+ * Cada panel se carga solo cuando el rol lo necesita.
+ *
+ * Antes los cinco paneles se importaban de forma estática, así que un
+ * cuidador con un teléfono de gama media en zona rural descargaba el panel
+ * del hospital entero (2.000+ líneas), Recharts y los módulos FURAG y
+ * financieros que nunca va a abrir. Con señal intermitente eso es la
+ * diferencia entre entrar y no entrar.
+ */
+const RegistroPage             = lazy(() => import('./pages/RegistroPage'));
+const DashboardEPS             = lazy(() => import('./components/DashboardEPS'));
+const DashboardCuidador        = lazy(() => import('./components/DashboardCuidador'));
+const DashboardProfesional     = lazy(() => import('./components/DashboardProfesional'));
+const DashboardSuperintendencia = lazy(() => import('./components/DashboardSuperintendencia'));
+const DashboardPaciente        = lazy(() => import('./components/DashboardPaciente'));
 
+/**
+ * Pantalla de espera mientras llega el fragmento del panel. Es sobria a
+ * propósito: aparece por menos de un segundo en buena red, y en mala red
+ * lo importante es que diga algo, no que entretenga.
+ */
+function CargandoPanel() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="min-h-screen bg-ink-50 flex flex-col items-center justify-center gap-4 px-6"
+    >
+      <span
+        aria-hidden="true"
+        className="h-8 w-8 rounded-full border-2 border-brand-200 border-t-brand-700 animate-spin"
+      />
+      <p className="text-sm text-ink-500">Cargando tu panel…</p>
+    </div>
+  );
+}
+
+const PANELES = {
+  SUPER: DashboardSuperintendencia,
+  ADMIN: DashboardEPS,
+  PROFESIONAL: DashboardProfesional,
+  PACIENTE: DashboardPaciente,
+  CUIDADOR: DashboardCuidador
+};
 
 function App() {
-  const [user, setUser] = useState(null);
+  // La sesión se resuelve en el primer render, no en un efecto: así no hay
+  // un parpadeo en el que el usuario aparece deslogueado y vuelve.
+  const [user, setUser] = useState(() => (getToken() ? getStoredUser() : null));
 
-  // --- PERSISTENCIA DE SESIÓN ---
   useEffect(() => {
-    // Sin token la sesión no sirve: las rutas del panel responderían 401.
-    if (getToken()) {
-      const storedUser = getStoredUser();
-      if (storedUser) setUser(storedUser);
-    } else {
-      clearSession();
-    }
+    // Sin token la sesión guardada no sirve: las rutas del panel
+    // responderían 401. Se limpia lo que haya quedado.
+    if (!getToken()) clearSession();
   }, []);
 
   const handleLogin = (userData, token) => {
@@ -40,58 +71,30 @@ function App() {
     clearSession();
   };
 
+  // El cuidador es el rol por defecto: es el más numeroso del programa.
+  const Panel = user ? (PANELES[user.role] || DashboardCuidador) : null;
+
   return (
     <>
-      {/* Componente de notificaciones global */}
       <Toaster position="top-center" richColors />
 
-      <Routes>
-        {/* RUTA 1: Landing Page (Inicio) */}
-        <Route 
-          path="/" 
-          element={!user ? <LandingPage onLoginSuccess={handleLogin} /> : <Navigate to="/dashboard" />} 
-        />
-        
-        {/* RUTA 2: Registro (Pública) */}
-        <Route 
-          path="/registro" 
-          element={<RegistroPage />} 
-        />
+      <Suspense fallback={<CargandoPanel />}>
+        <Routes>
+          <Route
+            path="/"
+            element={!user ? <LandingPage onLoginSuccess={handleLogin} /> : <Navigate to="/dashboard" replace />}
+          />
 
-        {/* RUTA 3: Dashboard (Protegida) */}
-        <Route 
-          path="/dashboard" 
-          element={
-            user ? (
-              // 1. Si es SUPERINTENDENCIA
-              user.role === 'SUPER' ? (
-                <DashboardSuperintendencia user={user} onLogout={handleLogout} />
-              ) 
-              // 2. Si es EPS (ADMIN)
-              : user.role === 'ADMIN' ? (
-                <DashboardEPS user={user} onLogout={handleLogout} />
-              ) 
-              // 3. Si es MÉDICO/ENFERMERO
-              : user.role === 'PROFESIONAL' ? (
-                <DashboardProfesional user={user} onLogout={handleLogout} />
-              ) 
-              // 👇 4. NUEVO: Si es PACIENTE 👇
-              : user.role === 'PACIENTE' ? (
-                <DashboardPaciente user={user} onLogout={handleLogout} />
-              )
-              // 5. Si es CUIDADOR (Default)
-              : (
-                <DashboardCuidador user={user} onLogout={handleLogout} />
-              )
-            ) : (
-              <Navigate to="/" />
-            )
-          } 
-        />
-        
-        {/* Ruta comodín */}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+          <Route path="/registro" element={<RegistroPage />} />
+
+          <Route
+            path="/dashboard"
+            element={Panel ? <Panel user={user} onLogout={handleLogout} /> : <Navigate to="/" replace />}
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </>
   );
 }

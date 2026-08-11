@@ -12,14 +12,10 @@ import { apiFetch, apiDownload } from '../lib/api';
 
 // Un solo tono: las gráficas llevan una sola serie, así que el color
 // codifica magnitud, no identidad. Validado para contraste sobre claro.
-const AZUL = '#6366F1';
+const AZUL = '#2a4396'; // brand-600, mismo hue de magnitud que el resto de gráficas
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const inicioAno = () => `${new Date().getFullYear()}-01-01`;
-
-const money = (n) => new Intl.NumberFormat('es-CO', {
-  style: 'currency', currency: 'COP', maximumFractionDigits: 0
-}).format(Number(n) || 0);
 
 // Un dato ausente se muestra como tal, no como cero.
 const oNoCalculable = (v, sufijo = '') =>
@@ -49,7 +45,7 @@ function Dato({ etiqueta, valor, nota, destacado }) {
   return (
     <div>
       <p className="text-xs text-gray-500 uppercase font-bold">{etiqueta}</p>
-      <p className={`font-bold ${destacado ? 'text-2xl text-indigo-600' : 'text-lg text-gray-800'}`}>{valor}</p>
+      <p className={`font-semibold ${destacado ? 'text-2xl text-brand-700' : 'text-lg text-ink-900'}`}>{valor}</p>
       {nota && <p className="text-xs text-gray-500 mt-0.5">{nota}</p>}
     </div>
   );
@@ -72,7 +68,7 @@ function Distribucion({ datos, total }) {
             </span>
           </div>
           <div className="w-full bg-gray-100 rounded-full h-2">
-            <div className="bg-indigo-500 h-2 rounded-full"
+            <div className="bg-brand-600 h-2 rounded-full"
               style={{ width: `${total > 0 ? (v / total) * 100 : 0}%` }} />
           </div>
         </div>
@@ -129,7 +125,7 @@ export default function CaracterizacionPrograma() {
   }));
 
   return (
-    <div className="animate-fadeIn space-y-5">
+    <div className="animate-fade space-y-5">
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Reporte ADRES</h2>

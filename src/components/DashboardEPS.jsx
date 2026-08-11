@@ -1,516 +1,429 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  Cell 
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-// --- IMPORTACIONES DE ICONOS ---
-import { MdStar } from 'react-icons/md';
 import {
   MdPerson, MdSchool, MdLocalHospital, MdFolderOpen, MdBadge,
-  MdAssignment, MdGavel, MdCheckCircle, MdWarning, MdEmojiEvents,
-  MdBarChart, MdMail, MdHealthAndSafety, MdAttachMoney, MdSearch,
-  MdRefresh, MdElderly, MdRemoveRedEye, MdCalendarToday, MdMedication,
-  MdShower, MdRestaurant, MdEditNote, MdPrint, MdClose, MdMedicalServices
+  MdAssignment, MdGavel, MdCheckCircle, MdWarning, MdVerified,
+  MdBarChart, MdMail, MdHealthAndSafety, MdRefresh, MdLogout,
+  MdRemoveRedEye, MdCalendarToday, MdEditNote, MdMedicalServices,
+  MdStar, MdInbox, MdGroups, MdArrowBack, MdAdd, MdDescription,
+  MdInsertDriveFile, MdEventNote
 } from 'react-icons/md';
+
 import { apiFetch, fileUrl } from '../lib/api';
 import ReportesFinancieros from './ReportesFinancieros';
 import EvidenciaFurag from './EvidenciaFurag';
 import CaracterizacionPrograma from './CaracterizacionPrograma';
+
+import {
+  Modal, Button, Badge, StatusDot, EmptyState,
+  Card, CardHeader, CardBody, SectionTitle,
+  StatCard, Dato, SinRegistrar, Meter, BarList, OrdinalSplit,
+  Field, SearchInput,
+  Table, Th, Td, Tr,
+  StatGridSkeleton, ChartSkeleton, TableSkeleton, CardGridSkeleton, ListSkeleton
+} from './ui';
+
+import {
+  RAMPA_ORDINAL, ejeX, ejeY, rejilla, tooltipEstilo, ANIM_MS
+} from '../lib/chartTheme';
+
 // Los tres reportes, con las imágenes que ya viven en public/.
-// El orden y los logos son los del diseño original.
 const REPORTES = [
-    {
-        id: 'ADRES',
-        titulo: 'ADRES',
-        descripcion: 'Caracterización de la población atendida',
-        imagen: '/logo1.png'
-    },
-    {
-        id: 'FURAG',
-        titulo: 'FURAG',
-        descripcion: 'Soportes de gestión para MIPG',
-        imagen: '/logo2.png'
-    },
-    {
-        id: 'FINANZAS',
-        titulo: 'FINANZAS',
-        descripcion: 'Ejecución del gasto por tipo',
-        imagen: '/logo3.png'
-    }
+  { id: 'ADRES',    titulo: 'ADRES',    descripcion: 'Caracterización de la población atendida', imagen: '/logo1.png' },
+  { id: 'FURAG',    titulo: 'FURAG',    descripcion: 'Soportes de gestión para MIPG',            imagen: '/logo2.png' },
+  { id: 'FINANZAS', titulo: 'Finanzas', descripcion: 'Ejecución del gasto por tipo',             imagen: '/logo3.png' }
 ];
 
-// --- CONSTANTES NUEVAS PARA ESTADÍSTICAS ---
-
-// Lista para que el gráfico de enfermedades salga limpio
 const COMMON_DISEASES = [
-    "Hipertensión Arterial",
-    "Diabetes Mellitus",
-    "Enfermedad Renal Crónica",
-    "EPOC / Enfermedad Respiratoria",
-    "Alzheimer / Demencia",
-    "Parkinson",
-    "Secuelas ACV (Derrame)",
-    "Cáncer / Cuidados Paliativos",
-    "Artritis / Artrosis Severa",
-    "Fractura de Cadera / Inmovilidad",
-    "Insuficiencia Cardíaca",
-    "Parálisis Cerebral",
-    "Esclerosis Lateral Amiotrófica (ELA)",
-    "Discapacidad Cognitiva",
-    "Otro"
+  "Hipertensión Arterial", "Diabetes Mellitus", "Enfermedad Renal Crónica",
+  "EPOC / Enfermedad Respiratoria", "Alzheimer / Demencia", "Parkinson",
+  "Secuelas ACV (Derrame)", "Cáncer / Cuidados Paliativos", "Artritis / Artrosis Severa",
+  "Fractura de Cadera / Inmovilidad", "Insuficiencia Cardíaca", "Parálisis Cerebral",
+  "Esclerosis Lateral Amiotrófica (ELA)", "Discapacidad Cognitiva", "Otro"
 ];
-// --- CONSTANTES GEOGRÁFICAS DE TÁMESIS ---
+
 const TAMESIS_ZONES = {
-    "Casco Urbano": [
-        "Centro", "San Antonio", "Pio XII", "El Estadio", "Otro barrio..."
-    ],
-    "Corregimiento Palermo": [
-        "Palermo (Centro Poblado)", "San Isidro", "El Líbano", "La Oculta", "Otra vereda..."
-    ],
-    "Corregimiento San Pablo": [
-        "San Pablo (Centro Poblado)", "El Rayo", "El Guamo", "El Tacón", "Otra vereda..."
-    ],
-    "Veredas Independientes": [
-        "Río Frío", "Santa Teresa", "El Encanto", "Otra vereda..."
-    ],
-    "Resguardo Indígena": [
-        "Comunidad Embera Chamí", "La Mirla", "Otro sector..."
-    ]
+  "Casco Urbano": ["Centro", "San Antonio", "Pio XII", "El Estadio", "Otro barrio..."],
+  "Corregimiento Palermo": ["Palermo (Centro Poblado)", "San Isidro", "El Líbano", "La Oculta", "Otra vereda..."],
+  "Corregimiento San Pablo": ["San Pablo (Centro Poblado)", "El Rayo", "El Guamo", "El Tacón", "Otra vereda..."],
+  "Veredas Independientes": ["Río Frío", "Santa Teresa", "El Encanto", "Otra vereda..."],
+  "Resguardo Indígena": ["Comunidad Embera Chamí", "La Mirla", "Otro sector..."]
 };
 
-const ApplicantDetailModal = ({ isOpen, onClose, candidate, onAction }) => {
-  if (!isOpen || !candidate) return null;
+// Umbral de cumplimiento de bitácoras. Se declara aquí y se MUESTRA en la
+// interfaz cada vez que se usa: un umbral que el lector no ve es un juicio
+// disfrazado de medición.
+const UMBRAL_CUMPLIMIENTO = 80;
 
-  // fileUrl normaliza la ruta y adjunta el token: /uploads exige sesión.
-  const getUrl = (path) => fileUrl(path);
+const TABS = [
+  { id: 'METRICAS',      label: 'Estadísticas',  icon: <MdBarChart /> },
+  { id: 'SOLICITUDES',   label: 'Solicitudes',   icon: <MdMail /> },
+  { id: 'VALIDACION',    label: 'Validación',    icon: <MdFolderOpen /> },
+  { id: 'ACTIVOS',       label: 'Cuidadores',    icon: <MdHealthAndSafety /> },
+  { id: 'PACIENTES',     label: 'Pacientes',     icon: <MdLocalHospital /> },
+  { id: 'PROFESIONALES', label: 'Profesionales', icon: <MdMedicalServices /> },
+  { id: 'FINANCIERO',    label: 'Reportes',      icon: <MdDescription /> }
+];
 
-  const Show = ({ label, val }) => (
-    <div className="mb-3">
-      <p className="text-xs text-gray-500 font-bold uppercase tracking-wide">{label}</p>
-      <p className="text-gray-900 font-medium text-sm break-words">
-        {val || <span className="text-gray-400 italic">No registrado</span>}
-      </p>
-    </div>
-  );
+const ESTADO_TONO = {
+  APROBADO: 'ok',
+  PRESELECCIONADO: 'warn',
+  RECHAZADO: 'risk',
+  PENDIENTE: 'neutral'
+};
+
+// ============================================================================
+// Modal de hoja de vida del aspirante
+// ============================================================================
+
+function ApplicantDetailModal({ open, onClose, candidate, onAction }) {
+  if (!candidate) return null;
 
   const hasMinDocs = candidate.fileCaregiverId && (candidate.fileTraining || candidate.senaFile);
 
+  const documentos = [
+    { key: 'fileCaregiverId', label: 'Cédula del cuidador', icon: <MdBadge />, path: candidate.fileCaregiverId, requerido: true },
+    { key: 'senaFile',        label: 'Diploma / curso SENA', icon: <MdSchool />, path: candidate.fileTraining || candidate.senaFile, requerido: true },
+    { key: 'filePatientId',   label: 'Documento del paciente', icon: <MdLocalHospital />, path: candidate.filePatientId },
+    { key: 'fileHistory',     label: 'Historia clínica', icon: <MdAssignment />, path: candidate.fileHistory },
+    { key: 'filePower',       label: 'Poder de representación', icon: <MdGavel />, path: candidate.filePower }
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        
-        <div className="bg-[#1f3c88] text-white px-8 py-5 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold border-2 border-white/30">
-              {candidate.fullName?.charAt(0) || "U"}
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">{candidate.fullName}</h2>
-              <p className="text-blue-200 text-sm">
-                C.C. {candidate.identification} • {candidate.email}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-white/60 hover:text-white text-3xl leading-none font-light transition"><MdClose /></button>
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="xl"
+      title={candidate.fullName}
+      subtitle={`C.C. ${candidate.identification || 'sin registrar'} · ${candidate.email || 'sin correo'}`}
+      icon={<MdPerson />}
+      footer={
+        <>
+          <Badge tone={ESTADO_TONO[candidate.status]}>{candidate.status}</Badge>
+          <div className="flex-1" />
+          {candidate.status === 'PENDIENTE' && (
+            <Button variant="accent" icon={<MdCheckCircle />} onClick={() => onAction(candidate.id, 'PRESELECCIONADO')}>
+              Preseleccionar
+            </Button>
+          )}
+          {candidate.status === 'PRESELECCIONADO' && (
+            <Button
+              variant="ok"
+              icon={<MdVerified />}
+              disabled={!hasMinDocs}
+              onClick={() => onAction(candidate.id, 'APROBADO')}
+              title={hasMinDocs ? undefined : 'Faltan la cédula o el diploma'}
+            >
+              Aprobar contratación
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        <div className="space-y-5">
+          <Card>
+            <CardHeader title="Información personal" />
+            <CardBody>
+              <dl className="space-y-3.5">
+                <Dato label="Tipo de documento" value={candidate.docType} />
+                <Dato label="Teléfono" value={candidate.phone} />
+                <Dato label="Dirección" value={candidate.address} />
+                <Dato
+                  label="Fecha de nacimiento"
+                  value={candidate.birthDate ? new Date(candidate.birthDate).toLocaleDateString('es-CO') : null}
+                />
+              </dl>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title="Perfil profesional" />
+            <CardBody>
+              <dl className="space-y-3.5">
+                <Dato label="Código SENA" value={candidate.senaCode} />
+                <Dato label="Años de experiencia" value={candidate.experienceYears} />
+                <Dato label="Transporte propio" value={candidate.hasTransport ? 'Sí tiene' : 'No tiene'} />
+              </dl>
+            </CardBody>
+          </Card>
         </div>
 
-        <div className="flex-1 overflow-auto bg-gray-50 p-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-[#1f3c88] font-bold border-b pb-2 mb-4 flex items-center gap-2">
-                  <MdPerson className="text-xl" /> Información Personal
-                </h3>
-                <Show label="Tipo Documento" val={candidate.docType} />
-                <Show label="Teléfono" val={candidate.phone} />
-                <Show label="Dirección" val={candidate.address} />
-                <Show label="Fecha Nacimiento" val={candidate.birthDate ? new Date(candidate.birthDate).toLocaleDateString() : ''} />
-              </div>
+        <Card className="h-fit">
+          <CardHeader title="Paciente y cuidado" />
+          <CardBody>
+            {candidate.patientName ? (
+              <>
+                <dl className="space-y-3.5">
+                  <Dato label="Nombre del paciente" value={candidate.patientName} />
+                  <Dato label="Documento del paciente" value={candidate.patientDoc} />
+                  <Dato label="Parentesco o relación" value={candidate.relationship} />
+                  <Dato label="Tipo de cuidado" value={candidate.careType} />
+                  <Dato label="Instrucciones especiales" value={candidate.careInstructions} />
+                </dl>
 
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-[#1f3c88] font-bold border-b pb-2 mb-4 flex items-center gap-2">
-                  <MdSchool className="text-xl" /> Perfil Profesional
-                </h3>
-                <Show label="Código SENA" val={candidate.senaCode} />
-                <Show label="Años Experiencia" val={candidate.experienceYears} />
-                <Show label="Transporte Propio" val={candidate.hasTransport ? "SÍ TIENE" : "NO TIENE"} />
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full">
-                <h3 className="text-[#1f3c88] font-bold border-b pb-2 mb-4 flex items-center gap-2">
-                  <MdLocalHospital className="text-xl" /> Paciente y Cuidado
-                </h3>
-                {candidate.patientName ? (
-                  <>
-                    <Show label="Nombre Paciente" val={candidate.patientName} />
-                    <Show label="Documento Paciente" val={candidate.patientDoc} />
-                    <Show label="Parentesco / Relación" val={candidate.relationship} />
-                    <Show label="Tipo de Cuidado" val={candidate.careType} />
-                    <Show label="Instrucciones Especiales" val={candidate.careInstructions} />
-                    
-                    <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-100">
-                      <h4 className="text-red-800 font-bold text-sm mb-2">Diagnóstico Clínico</h4>
-                      <Show label="Diagnóstico" val={candidate.diagnosis} />
-                      <Show label="Grado Discapacidad" val={candidate.disabilityGrade} />
-                      <Show label="Tiene Orden Médica" val={candidate.hasMedicalOrder} />
-                    </div>
-                  </>
-                ) : (
-                   <div className="text-center py-10 text-gray-400 italic border-2 border-dashed border-gray-200 rounded-lg">
-                     Perfil Profesional Externo <br/> (Sin paciente vinculado)
-                   </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-[#1f3c88] font-bold border-b pb-2 mb-4 flex items-center gap-2">
-                  <MdFolderOpen className="text-xl" /> Documentos Cargados
-                </h3>
-                
-                <div className="grid grid-cols-1 gap-3">
-                    {candidate.fileCaregiverId ? (
-                        <a href={getUrl(candidate.fileCaregiverId)} target="_blank" rel="noreferrer" 
-                           className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition text-sm font-semibold">
-                           <MdBadge className="text-lg" /> Cédula Cuidador
-                        </a>
-                    ) : <span className="text-xs text-red-400 pl-2">x Falta Cédula Cuidador</span>}
-
-                    {(candidate.fileTraining || candidate.senaFile) ? (
-                        <a href={getUrl(candidate.fileTraining || candidate.senaFile)} target="_blank" rel="noreferrer" 
-                           className="flex items-center gap-3 p-3 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition text-sm font-semibold">
-                           <MdSchool className="text-lg" /> Diploma / Curso SENA
-                        </a>
-                    ) : <span className="text-xs text-red-400 pl-2">x Falta Diploma SENA</span>}
-
-                    {candidate.filePatientId && (
-                        <a href={getUrl(candidate.filePatientId)} target="_blank" rel="noreferrer" 
-                           className="flex items-center gap-3 p-3 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition text-sm font-semibold">
-                           <MdLocalHospital className="text-lg" /> Doc. Identidad Paciente
-                        </a>
-                    )}
-
-                    {candidate.fileHistory && (
-                        <a href={getUrl(candidate.fileHistory)} target="_blank" rel="noreferrer" 
-                           className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 transition text-sm font-semibold">
-                           <MdAssignment className="text-lg" /> Historia Clínica
-                        </a>
-                    )}
-
-                    {candidate.filePower && (
-                        <a href={getUrl(candidate.filePower)} target="_blank" rel="noreferrer" 
-                           className="flex items-center gap-3 p-3 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 transition text-sm font-semibold">
-                           <MdGavel className="text-lg" /> Poder de Representación
-                        </a>
-                    )}
+                <div className="mt-5 pt-5 border-t border-ink-200">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-600 mb-3">
+                    Diagnóstico clínico
+                  </h4>
+                  <dl className="space-y-3.5">
+                    <Dato label="Diagnóstico" value={candidate.diagnosis} />
+                    <Dato label="Grado de discapacidad" value={candidate.disabilityGrade} />
+                    <Dato label="Tiene orden médica" value={candidate.hasMedicalOrder} />
+                  </dl>
                 </div>
-              </div>
+              </>
+            ) : (
+              <p className="text-sm text-ink-500 py-8 text-center">
+                Perfil profesional externo, sin paciente vinculado.
+              </p>
+            )}
+          </CardBody>
+        </Card>
 
-              <div className="bg-gray-100 p-6 rounded-xl border border-gray-200 text-center sticky top-0">
-                <h3 className="text-gray-800 font-bold mb-4">Gestión de la Solicitud</h3>
-                
-                {candidate.status === 'PENDIENTE' && (
-                    <button
-                        onClick={() => onAction(candidate.id, 'PRESELECCIONADO')}
-                        className="w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-lg shadow-md transition mb-3 hover:scale-[1.02] flex items-center justify-center gap-2"
+        <Card className="h-fit">
+          <CardHeader
+            title="Documentos"
+            description={hasMinDocs
+              ? 'Documentación mínima completa.'
+              : 'Faltan documentos obligatorios para aprobar.'}
+          />
+          <CardBody>
+            <ul className="space-y-2">
+              {documentos.map(doc => (
+                <li key={doc.key}>
+                  {doc.path ? (
+                    <a
+                      href={fileUrl(doc.path)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2.5 min-h-11 px-3 rounded-md border border-ink-200 bg-white text-sm font-medium text-brand-700 hover:bg-brand-50 hover:border-brand-200 transition-colors"
                     >
-                        <MdCheckCircle className="text-xl" /> Preseleccionar
-                    </button>
-                )}
-
-                {candidate.status === 'PRESELECCIONADO' && (
-                    <>
-                        <p className="text-xs text-gray-500 mb-3 px-2 flex items-center justify-center gap-1">
-                           {hasMinDocs 
-                             ? "Documentación mínima completa." 
-                             : <><MdWarning className="text-red-500 text-lg"/> "Faltan documentos obligatorios (Cédula o Diploma)."</>}
-                        </p>
-                        <button
-                            onClick={() => onAction(candidate.id, 'APROBADO')}
-                            disabled={!hasMinDocs} 
-                            className={`w-full py-3 font-bold rounded-lg shadow-md transition flex items-center justify-center gap-2 ${hasMinDocs ? 'bg-green-600 hover:bg-green-700 text-white hover:scale-[1.02]' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-                        >
-                            <MdEmojiEvents className="text-xl" /> Aprobar Contratación
-                        </button>
-                    </>
-                )}
-
-                {candidate.status === 'APROBADO' && (
-                    <div className="p-3 bg-green-100 text-green-800 rounded-lg font-bold border border-green-200">
-                        Usuario Activo
-                    </div>
-                )}
-
-                {candidate.status === 'RECHAZADO' && (
-                    <div className="p-3 bg-red-100 text-red-800 rounded-lg font-bold border border-red-200">
-                        Usuario Rechazado
-                    </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+                      <span aria-hidden="true" className="text-base shrink-0">{doc.icon}</span>
+                      <span className="truncate">{doc.label}</span>
+                    </a>
+                  ) : doc.requerido ? (
+                    <p className="flex items-center gap-2.5 min-h-11 px-3 rounded-md border border-dashed border-risk-border bg-risk-soft text-sm text-risk-strong">
+                      <MdWarning aria-hidden="true" className="text-base shrink-0" />
+                      Falta: {doc.label}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
       </div>
-    </div>
+    </Modal>
   );
-};
+}
+
+// ============================================================================
+// Panel principal
+// ============================================================================
+
 export default function DashboardEPS({ user, onLogout }) {
-  // ==============================================================================
-  // 1. ESTADOS (STATES) - GESTIÓN DE DATOS Y NAVEGACIÓN
-  // ==============================================================================
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  
-  // AÑADE ESTA LÍNEA AQUÍ:
-  const openPatientDetail = (patient) => {
-    setSelectedPatient(patient);
-  };
+  const [activeTab, setActiveTab] = useState('METRICAS');
+  const [searchTerm, setSearchTerm] = useState('');
 
-
-  const [selectedPro, setSelectedPro] = useState(null);
-  // Navegación principal
-  const [activeTab, setActiveTab] = useState('METRICAS'); // Iniciamos en métricas para ver el impacto visual
-  // Opciones: 'METRICAS', 'SOLICITUDES', 'VALIDACION', 'ACTIVOS', 'PACIENTES', 'PROFESIONALES', 'FINANCIERO'
-  // 1. NUEVO ESTADO PARA EL MODAL DE DETALLE
-  const [selectedCandidate, setSelectedCandidate] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-
-  // 2. FUNCIÓN PARA ABRIRLO
-  const openCandidateDetail = (candidate) => {
-    setSelectedCandidate(candidate);
-    setShowDetailModal(true);
-  };
-
-  // 3. FUNCIÓN DE ACCIÓN (Conecta con tu lógica existente de handleStatusChange)
-  const handleDetailAction = (id, status) => {
-      handleStatusChange(id, status); // Usamos tu función existente
-      setShowDetailModal(false);      // Cerramos el modal tras la acción
-  };
-
-  // Datos traídos del Backend
+  // Datos del backend
   const [caregivers, setCaregivers] = useState([]);
   const [patients, setPatients] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [professionals, setProfessionals] = useState([]); 
-  const [visits, setVisits] = useState([]); 
-  const [financialReports, setFinancialReports] = useState([]); 
-  
-  // Estados de carga y búsqueda
+  const [professionals, setProfessionals] = useState([]);
+  const [visits, setVisits] = useState([]);
+  const [financialReports, setFinancialReports] = useState([]);
+
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
-  // --- ESTADOS PARA MODALES DE CUIDADORES Y PACIENTES ---
-  const [selectedCaregiver, setSelectedCaregiver] = useState(null); 
-  const [showAssignModal, setShowAssignModal] = useState(false);
+  // Modales
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [selectedPro, setSelectedPro] = useState(null);
   const [caregiverToAssign, setCaregiverToAssign] = useState(null);
-  
-  const [showLogsModal, setShowLogsModal] = useState(false);
-  const [selectedCaregiverLogs, setSelectedCaregiverLogs] = useState([]);
-  const [selectedCaregiverName, setSelectedCaregiverName] = useState('');
-  
-  const [showPatientForm, setShowPatientForm] = useState(false);
-  // NOTA: Se agregó 'stratum' (Estrato) al estado inicial
-  const [newPatientData, setNewPatientData] = useState({ 
-    fullName: '', age: '', stratum: '', diagnosis: '', address: '', contactPhone: '', careInstructions: '', zoneCategory: '', zoneDetail: '',
-    fileHistory: null});
-
-  // --- ESTADOS PARA MODALES DE PROFESIONALES ---
-  const [showProForm, setShowProForm] = useState(false);
-const [newProData, setNewProData] = useState({ 
-    fullName: '', email: '', identification: '', phone: '', position: '', 
-    resumeFile: null, fileHistory: null 
-});
-  const [showVisitsModal, setShowVisitsModal] = useState(false);
-  const [selectedProVisits, setSelectedProVisits] = useState([]);
-  const [selectedProName, setSelectedProName] = useState('');
-
-  // --- MODALES DE DETALLE DE LOS KPI DE ESTADÍSTICAS ---
+  const [logsModal, setLogsModal] = useState(null);      // { nombre, registros }
+  const [visitsModal, setVisitsModal] = useState(null);  // { nombre, visitas }
   const [showComplianceDetail, setShowComplianceDetail] = useState(false);
   const [showVisitsDetail, setShowVisitsDetail] = useState(false);
+  const [showPatientForm, setShowPatientForm] = useState(false);
+  const [showProForm, setShowProForm] = useState(false);
 
-  // Cajón abierto dentro de Reportes: null muestra los tres.
+  const [newPatientData, setNewPatientData] = useState({
+    fullName: '', identification: '', email: '', age: '', stratum: '', diagnosis: '',
+    address: '', contactPhone: '', careInstructions: '', zoneCategory: '', zoneDetail: '', fileHistory: null
+  });
+  const [newProData, setNewProData] = useState({
+    fullName: '', email: '', identification: '', phone: '', position: '', resumeFile: null
+  });
+  const [saving, setSaving] = useState(false);
+
   const [reporteAbierto, setReporteAbierto] = useState(null);
 
+  // --------------------------------------------------------------------------
+  // Carga
+  // --------------------------------------------------------------------------
 
-// ==============================================================================
-  // 2. FETCH DATA
-  // ==============================================================================
-  const fetchData = async () => {
-    // Protección: Si setLoading no existe, no falla.
-    if (typeof setLoading === 'function') setLoading(true);
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
+    if (silent) setRefreshing(true); else setLoading(true);
+    setLoadError(null);
 
     try {
-      // 1. Obtener ID del LocalStorage de forma segura
       const storedRaw = localStorage.getItem('user');
-      if (!storedRaw) {
-          console.warn("⚠️ No hay usuario, deteniendo carga.");
-          if (typeof setLoading === 'function') setLoading(false);
-          return;
-      }
-      
+      if (!storedRaw) return;
+
       const storedUser = JSON.parse(storedRaw);
       const myEpsId = storedUser.epsId || storedUser.id;
-      const queryParams = myEpsId ? `?epsId=${myEpsId}` : '';
+      const qs = myEpsId ? `?epsId=${myEpsId}` : '';
 
-      console.log("🚀 Iniciando carga segura con filtro:", queryParams);
-
-      // 2. Peticiones (Usamos rutas completas por seguridad)
       const [resP, resC, resPro, resL, resV, resF] = await Promise.all([
-        apiFetch(`/api/patients${queryParams}`),
-        apiFetch(`/api/caregivers${queryParams}`),
-        apiFetch(`/api/professionals${queryParams}`),
-        apiFetch(`/api/logs${queryParams}`),
-        apiFetch(`/api/visits${queryParams}`),
+        apiFetch(`/api/patients${qs}`),
+        apiFetch(`/api/caregivers${qs}`),
+        apiFetch(`/api/professionals${qs}`),
+        apiFetch(`/api/logs${qs}`),
+        apiFetch(`/api/visits${qs}`),
         apiFetch('/api/financial-reports')
       ]);
 
-      // 3. Guardado seguro (Verificamos que las funciones set existan)
-      if (resP.ok) { const d = await resP.json(); setPatients(Array.isArray(d) ? d : []); }
-      if (resC.ok) { const d = await resC.json(); setCaregivers(Array.isArray(d) ? d : []); }
+      if (resP.ok)   { const d = await resP.json();   setPatients(Array.isArray(d) ? d : []); }
+      if (resC.ok)   { const d = await resC.json();   setCaregivers(Array.isArray(d) ? d : []); }
       if (resPro.ok) { const d = await resPro.json(); setProfessionals(Array.isArray(d) ? d : []); }
-      if (resL.ok) { const d = await resL.json(); setLogs(Array.isArray(d) ? d : []); }
-      if (resV.ok) { const d = await resV.json(); setVisits(Array.isArray(d) ? d : []); }
-      if (resF.ok) { const d = await resF.json(); setFinancialReports(Array.isArray(d) ? d : []); }
+      if (resL.ok)   { const d = await resL.json();   setLogs(Array.isArray(d) ? d : []); }
+      if (resV.ok)   { const d = await resV.json();   setVisits(Array.isArray(d) ? d : []); }
+      if (resF.ok)   { const d = await resF.json();   setFinancialReports(Array.isArray(d) ? d : []); }
 
-    } catch (error) {
-      console.error("❌ Error recuperable:", error);
-      // Quitamos el toast por si eso era lo que rompía la pantalla
+    } catch {
+      // Con señal intermitente esto pasa a diario. Se dice, no se esconde:
+      // un tablero en blanco sin explicación se lee como "no hay programa".
+      setLoadError('No se pudo contactar el servidor. Revisa la conexión e intenta de nuevo.');
     } finally {
-      if (typeof setLoading === 'function') setLoading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-
-useEffect(() => {
-    fetchData();// Carga inicial
   }, []);
-  // ==============================================================================
-  // 2. CÁLCULO DE ESTADÍSTICAS 
-  // ==============================================================================
-  const getStats = () => {
-      // 1. Protección contra fallos
-      if (!patients) return { 
-          assigned: 0, unassigned: 0, coveragePercent: 0, 
-          strataCounts: {1:0,2:0,3:0,4:0,5:0,6:0}, 
-          sortedDiagnoses: [], logCompliance: 0, visitOpportunity: 0, 
-          ageGroups: { pediatrico: 0, adulto: 0, geriatrico: 0 } 
-      };
 
-      const totalPatients = patients.length || 1;
-      const assigned = patients.filter(p => p.caregiverId).length;
-      const unassigned = patients.filter(p => !p.caregiverId).length;
-      const coveragePercent = Math.round((assigned / totalPatients) * 100);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-      // 2. Lógica Robusta de Estratos
-      const strataCounts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
-      patients.forEach(p => {
-          const cleanStr = String(p.stratum || "0").replace(/\D/g, ''); 
-          const s = parseInt(cleanStr);
-          if(s >= 1 && s <= 6) strataCounts[s]++;
-      });
+  // --------------------------------------------------------------------------
+  // Indicadores
+  //
+  // Regla central del proyecto: nada inventado. Un porcentaje sin base
+  // sobre la cual calcularse NO es cero, es `null`, y la interfaz escribe
+  // "Sin registrar". Antes esto hacía `patients.length || 1` y publicaba
+  // 0% de cobertura sobre cero pacientes.
+  //
+  // Va en useMemo porque el cálculo anida filtros de visitas dentro de un
+  // recorrido de pacientes: sin memoizar corría entero en cada pulsación
+  // del buscador.
+  // --------------------------------------------------------------------------
 
-      // 3. Lógica Robusta de Diagnósticos
-      const diagnoses = {};
-      patients.forEach(p => {
-          let rawDx = p.diagnosis || 'SIN DIAGNÓSTICO';
-          let d = rawDx.split('(')[0].trim();
-          d = d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
-          if(d === '' || d === '.') d = 'Sin Diagnóstico';
-          diagnoses[d] = (diagnoses[d] || 0) + 1;
-      });
-      const sortedDiagnoses = Object.entries(diagnoses)
-          .sort((a,b) => b[1] - a[1]).slice(0, 5);
+  const stats = useMemo(() => {
+    const totalPatients = patients.length;
+    const assigned = patients.filter(p => p.caregiverId).length;
+    const unassigned = totalPatients - assigned;
 
-      // 4. KPI Bitácoras 
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const recentLogs = logs.filter(l => new Date(l.date) >= oneWeekAgo).length;
-      const expectedLogs = (assigned || 1) * 7; 
-      const logCompliance = Math.min(100, Math.round((recentLogs / expectedLogs) * 100));
+    const coveragePercent = totalPatients > 0
+      ? Math.round((assigned / totalPatients) * 100)
+      : null;
 
-      // 5. KPI Visitas 
-      const fiveDaysAgo = new Date();
-      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-      let patientsOnTime = 0;
-      patients.forEach(p => {
-          const pVisits = visits.filter(v => v.patientId === p.id);
-          if (pVisits.length > 0) {
-              const sortedVisits = pVisits.sort((a,b) => new Date(b.date) - new Date(a.date));
-              if (new Date(sortedVisits[0].date) >= fiveDaysAgo) patientsOnTime++;
-          }
-      });
-      const visitOpportunity = Math.round((patientsOnTime / totalPatients) * 100);
+    const strataCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    patients.forEach(p => {
+      const s = parseInt(String(p.stratum || '0').replace(/\D/g, ''), 10);
+      if (s >= 1 && s <= 6) strataCounts[s]++;
+    });
 
-      // 6. Grupos de Edad
-      let ageGroups = { pediatrico: 0, adulto: 0, geriatrico: 0 };
-      patients.forEach(p => {
-          const age = parseInt(p.age);
-          if (age <= 18) ageGroups.pediatrico++;
-          else if (age <= 59) ageGroups.adulto++;
-          else if (age >= 60) ageGroups.geriatrico++;
-      });
+    const diagnoses = {};
+    patients.forEach(p => {
+      let d = (p.diagnosis || 'Sin diagnóstico').split('(')[0].trim();
+      d = d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+      if (d === '' || d === '.') d = 'Sin diagnóstico';
+      diagnoses[d] = (diagnoses[d] || 0) + 1;
+    });
+    const sortedDiagnoses = Object.entries(diagnoses).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-      // 7. Financiero
-      const totalBudgetGlobal = financialReports.reduce((acc, curr) => acc + Number(curr.totalBudget || 0), 0);
-      const totalExecutedGlobal = financialReports.reduce((acc, curr) => acc + Number(curr.totalExecuted || 0), 0);
-      const executionPercent = totalBudgetGlobal > 0 ? Math.round((totalExecutedGlobal / totalBudgetGlobal) * 100) : 0;
+    // Bitácoras: solo se puede medir si hay pacientes asignados a alguien.
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const recentLogs = logs.filter(l => new Date(l.date) >= oneWeekAgo).length;
+    const expectedLogs = assigned * 7;
+    const logCompliance = expectedLogs > 0
+      ? Math.min(100, Math.round((recentLogs / expectedLogs) * 100))
+      : null;
 
-      return { 
-          assigned, unassigned, coveragePercent, 
-          strataCounts, sortedDiagnoses, ageGroups,
-          logCompliance, visitOpportunity, executionPercent
-      };
-  };
+    // Visitas: se mide contra los pacientes registrados.
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    const visitasPorPaciente = new Map();
+    visits.forEach(v => {
+      const prev = visitasPorPaciente.get(v.patientId);
+      const d = new Date(v.date);
+      if (!prev || d > prev) visitasPorPaciente.set(v.patientId, d);
+    });
+    const patientsOnTime = patients.filter(p => {
+      const ultima = visitasPorPaciente.get(p.id);
+      return ultima && ultima >= fiveDaysAgo;
+    }).length;
+    const visitOpportunity = totalPatients > 0
+      ? Math.round((patientsOnTime / totalPatients) * 100)
+      : null;
 
-  const stats = getStats();
+    const ageGroups = { pediatrico: 0, adulto: 0, geriatrico: 0 };
+    patients.forEach(p => {
+      const age = parseInt(p.age, 10);
+      if (Number.isNaN(age)) return;
+      if (age <= 18) ageGroups.pediatrico++;
+      else if (age <= 59) ageGroups.adulto++;
+      else ageGroups.geriatrico++;
+    });
+    const conEdad = ageGroups.pediatrico + ageGroups.adulto + ageGroups.geriatrico;
 
-  // ==============================================================================
-  // 2.b DETALLE DE LOS KPI (lo que se abre al hacer clic en los recuadros)
-  // ==============================================================================
+    const totalBudget = financialReports.reduce((a, c) => a + Number(c.totalBudget || 0), 0);
+    const totalExecuted = financialReports.reduce((a, c) => a + Number(c.totalExecuted || 0), 0);
+    const executionPercent = totalBudget > 0 ? Math.round((totalExecuted / totalBudget) * 100) : null;
 
-  // Umbral a partir del cual se considera que un cuidador cumple.
-  const UMBRAL_CUMPLIMIENTO = 80;
+    return {
+      totalPatients, assigned, unassigned, coveragePercent,
+      strataCounts, sortedDiagnoses, ageGroups, conEdad,
+      recentLogs, expectedLogs, logCompliance,
+      patientsOnTime, visitOpportunity, executionPercent
+    };
+  }, [patients, logs, visits, financialReports]);
 
-  // Clave local YYYY-MM-DD. Comparar así evita que el desfase UTC
-  // mueva una bitácora al día anterior o siguiente.
+  const stratumChartData = useMemo(
+    () => [1, 2, 3, 4, 5, 6].map((level, i) => ({
+      name: `Estrato ${level}`,
+      corto: `E${level}`,
+      cantidad: stats.strataCounts[level],
+      // El color va en el dato: `Cell` quedó obsoleto en Recharts 3.
+      fill: RAMPA_ORDINAL[i]
+    })),
+    [stats.strataCounts]
+  );
+
   const dayKey = (value) => {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return null;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
-  // Los últimos N días, del más antiguo al más reciente.
-  const buildDayWindow = (days) => {
+  const logDetail = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    return Array.from({ length: days }, (_, i) => {
+    const ventana = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(hoy);
-      d.setDate(d.getDate() - (days - 1 - i));
+      d.setDate(d.getDate() - (6 - i));
       return {
         key: dayKey(d),
         label: d.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', ''),
         dayNum: d.getDate()
       };
     });
-  };
-
-  // Quién está cumpliendo con las bitácoras y quién no, en los últimos 7 días.
-  const getLogComplianceDetail = () => {
-    const ventana = buildDayWindow(7);
     const clavesVentana = new Set(ventana.map(d => d.key));
 
-    // Solo se evalúa a los cuidadores que tienen pacientes a cargo.
     const porCuidador = new Map();
     patients.filter(p => p.caregiverId).forEach(p => {
       if (!porCuidador.has(p.caregiverId)) porCuidador.set(p.caregiverId, []);
@@ -526,39 +439,33 @@ useEffect(() => {
 
     const filas = [...porCuidador.entries()].map(([caregiverId, susPacientes]) => {
       const cuidador = caregivers.find(c => c.id === caregiverId);
-
       const dias = ventana.map(d => {
         const cubiertos = susPacientes.filter(p => reportados.has(`${p.id}|${d.key}`)).length;
         return { ...d, cubiertos, total: susPacientes.length, completo: cubiertos === susPacientes.length };
       });
-
       const esperado = susPacientes.length * 7;
       const registradas = dias.reduce((acc, d) => acc + d.cubiertos, 0);
-      const percent = esperado > 0 ? Math.round((registradas / esperado) * 100) : 0;
-
       return {
         caregiverId,
         name: cuidador?.fullName || `Cuidador #${caregiverId}`,
-        identification: cuidador?.identification || '—',
+        identification: cuidador?.identification || null,
         pacientes: susPacientes,
-        dias, registradas, esperado, percent
+        dias, registradas, esperado,
+        percent: esperado > 0 ? Math.round((registradas / esperado) * 100) : null
       };
     });
 
-    // Los incumplidos primero: es lo que la EPS necesita accionar.
-    filas.sort((a, b) => a.percent - b.percent);
+    // Los incumplidos primero: es lo que hay que accionar.
+    filas.sort((a, b) => (a.percent ?? 0) - (b.percent ?? 0));
 
     return {
-      ventana,
-      filas,
-      cumplen: filas.filter(f => f.percent >= UMBRAL_CUMPLIMIENTO),
-      incumplen: filas.filter(f => f.percent < UMBRAL_CUMPLIMIENTO)
+      ventana, filas,
+      cumplen: filas.filter(f => f.percent !== null && f.percent >= UMBRAL_CUMPLIMIENTO),
+      incumplen: filas.filter(f => f.percent !== null && f.percent < UMBRAL_CUMPLIMIENTO)
     };
-  };
+  }, [patients, logs, caregivers]);
 
-  // Total de visitas realizadas, por profesional y estado por paciente.
-  const getVisitsDetail = () => {
-    // Misma ventana móvil que usa el KPI de la tarjeta.
+  const visitsDetail = useMemo(() => {
     const limite = new Date();
     limite.setDate(limite.getDate() - 5);
 
@@ -577,28 +484,27 @@ useEffect(() => {
     const filasPro = [...porProfesional.entries()]
       .map(([id, datos]) => {
         const pro = professionals.find(p => p.id === id);
-        return {
-          id,
-          name: pro?.fullName || `Profesional #${id}`,
-          position: pro?.position || 'Sin cargo registrado',
-          ...datos
-        };
+        return { id, name: pro?.fullName || `Profesional #${id}`, position: pro?.position || null, ...datos };
       })
       .sort((a, b) => b.total - a.total);
 
+    const porPaciente = new Map();
+    visits.forEach(v => {
+      if (!porPaciente.has(v.patientId)) porPaciente.set(v.patientId, []);
+      porPaciente.get(v.patientId).push(v);
+    });
+
     const filasPaciente = patients
       .map(p => {
-        const suyas = visits.filter(v => v.patientId === p.id);
+        const suyas = porPaciente.get(p.id) || [];
         const ultima = suyas.reduce((max, v) => {
           const d = new Date(v.date);
           return !max || d > max ? d : max;
         }, null);
-
         return {
           id: p.id,
           name: p.fullName,
           total: suyas.length,
-          recientes: suyas.filter(v => new Date(v.date) >= limite).length,
           ultima,
           alDia: Boolean(ultima && ultima >= limite),
           diasSin: ultima ? Math.floor((Date.now() - ultima.getTime()) / 86400000) : null
@@ -610,36 +516,13 @@ useEffect(() => {
       totalVisitas: visits.length,
       totalRecientes: visits.filter(v => new Date(v.date) >= limite).length,
       pacientesAlDia: filasPaciente.filter(p => p.alDia).length,
-      filasPro,
-      filasPaciente
+      filasPro, filasPaciente
     };
-  };
+  }, [visits, patients, professionals]);
 
-  const logDetail = getLogComplianceDetail();
-  const visitsDetail = getVisitsDetail();
-
-  // ==============================================================================
-  // 2. TU USEEFFECT (SOLO LE AGREGAMOS LA DEPENDENCIA [user])
-  // ==============================================================================
-
-const handleViewLogs = (persona) => {
-    // 1. Buscamos las bitácoras normales (cuidador)
-    const patientLogs = logs
-      .filter(l => l.patientId === persona.id || l.caregiverId === persona.id)
-      .map(l => ({ ...l, recordType: 'CUIDADOR' }));
-
-    // 2. Buscamos las visitas médicas (profesional)
-    const patientVisits = visits // Asegúrate de tener 'visits' en tus estados/variables
-      .filter(v => v.patientId === persona.id)
-      .map(v => ({ ...v, recordType: 'PROFESIONAL' }));
-
-    // 3. Unimos todo y ordenamos por fecha
-    const unifiedLogs = [...patientLogs, ...patientVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    setSelectedCaregiverLogs(unifiedLogs);
-    setSelectedCaregiverName(persona.fullName);
-    setShowLogsModal(true);
-  };
+  // --------------------------------------------------------------------------
+  // Acciones
+  // --------------------------------------------------------------------------
 
   const handleStatusChange = async (id, newStatus) => {
     try {
@@ -649,1626 +532,1651 @@ const handleViewLogs = (persona) => {
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
-        toast.success(`Estado actualizado a ${newStatus}`);
-        fetchData();
-        setSelectedCaregiver(null);
+        toast.success(`Estado actualizado a ${newStatus.toLowerCase()}.`);
+        setSelectedCandidate(null);
+        fetchData({ silent: true });
       } else {
-        toast.error("Error al actualizar estado");
+        toast.error('No se pudo actualizar el estado.');
       }
-    } catch (error) { toast.error("Error de conexión"); }
+    } catch {
+      toast.error('Sin conexión con el servidor.');
+    }
   };
 
-const handleCreatePatient = async (e) => {
-    e.preventDefault();
-
-    // 1. Validación de seguridad: ¿Sabemos quién es la EPS?
-    if (!user || !user.epsId) {
-      toast.error("Error crítico: No se identifica tu EPS. Cierra sesión e intenta de nuevo.");
-      return;
-    }
-
-    // 2. Validación de correo obligatorio para enviar el código de acceso
-    if (!newPatientData.email) {
-      toast.error("El correo electrónico del paciente es obligatorio para generarle su acceso.");
-      return;
-    }
-
-    // 3. Estructura de datos a enviar
-    const payload = {
-      fullName: newPatientData.fullName,
-      identification: (newPatientData.identification || '').trim(), // Llave de auto-asignación
-      email: newPatientData.email, // 👇 NUEVO: Se envía el correo del paciente
-      age: parseInt(newPatientData.age), 
-      address: newPatientData.address,
-      phone: newPatientData.contactPhone || newPatientData.phone, 
-      careInstructions: newPatientData.careInstructions, 
-      zoneCategory: newPatientData.zoneCategory,         
-      zoneDetail: newPatientData.zoneDetail,             
-      stratum: newPatientData.stratum || "0",
-      condition: newPatientData.diagnosis || "Sin Diagnóstico",
-      diagnosis: newPatientData.diagnosis || "Sin Diagnóstico",
-      epsId: parseInt(user.epsId) 
-    };
-
-    try {
-      const res = await apiFetch('/api/patients', { 
-        method: 'POST', 
-        headers: {'Content-Type': 'application/json'}, 
-        body: JSON.stringify(payload)
-      });
-      
-      const data = await res.json(); // Leemos la respuesta siempre
-
-      if(res.ok) {
-        toast.success("Paciente creado con éxito");
-        setShowPatientForm(false);
-        
-        // Limpiar formulario
-        setNewPatientData({
-            fullName: '', identification: '', email: '', age: '', stratum: '', diagnosis: '',
-            address: '', contactPhone: '', careInstructions: '', zoneCategory: '', zoneDetail: '',
-            fileHistory: null
-        });
-        
-        // Recargar la lista
-        if (typeof fetchData === 'function') fetchData(); 
-      
-
-      } else {
-      
-        toast.error(data.error || "Error al guardar paciente");
-      }
-    } catch (e) { 
-        console.error("Error de conexión:", e);
-        toast.error("Error de conexión con el servidor"); 
-    }
-  };
   const handleAssignPatient = async (patientId) => {
     if (!caregiverToAssign) return;
     try {
       const res = await apiFetch(`/api/patients/${patientId}/assign`, {
         method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ caregiverId: caregiverToAssign.id })
       });
       if (res.ok) {
-        toast.success("Paciente asignado exitosamente");
-        setShowAssignModal(false);
+        toast.success('Paciente asignado.');
         setCaregiverToAssign(null);
-        fetchData();
+        fetchData({ silent: true });
       } else {
-        toast.error("Error en la asignación");
+        toast.error('No se pudo asignar el paciente.');
       }
-    } catch (error) { toast.error("Error de asignación"); }
+    } catch {
+      toast.error('Sin conexión con el servidor.');
+    }
   };
-const handleCreateProfessional = async (e) => {
+
+  const handleCreatePatient = async (e) => {
     e.preventDefault();
-    
-    // Usamos FormData para poder enviar archivos binarios
+    if (!user?.epsId) {
+      toast.error('No se identifica tu entidad. Cierra sesión y vuelve a entrar.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: newPatientData.fullName,
+          identification: (newPatientData.identification || '').trim(),
+          email: newPatientData.email,
+          age: parseInt(newPatientData.age, 10),
+          address: newPatientData.address,
+          phone: newPatientData.contactPhone,
+          careInstructions: newPatientData.careInstructions,
+          zoneCategory: newPatientData.zoneCategory,
+          zoneDetail: newPatientData.zoneDetail,
+          stratum: newPatientData.stratum || '0',
+          condition: newPatientData.diagnosis || 'Sin diagnóstico',
+          diagnosis: newPatientData.diagnosis || 'Sin diagnóstico',
+          epsId: parseInt(user.epsId, 10)
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Paciente registrado. Se le envió su código de acceso al correo.');
+        setShowPatientForm(false);
+        setNewPatientData({
+          fullName: '', identification: '', email: '', age: '', stratum: '', diagnosis: '',
+          address: '', contactPhone: '', careInstructions: '', zoneCategory: '', zoneDetail: '', fileHistory: null
+        });
+        fetchData({ silent: true });
+      } else {
+        toast.error(data.error || 'No se pudo guardar el paciente.');
+      }
+    } catch {
+      toast.error('Sin conexión con el servidor.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateProfessional = async (e) => {
+    e.preventDefault();
+    setSaving(true);
     const formData = new FormData();
     formData.append('fullName', newProData.fullName);
     formData.append('email', newProData.email);
     formData.append('identification', newProData.identification);
     formData.append('phone', newProData.phone);
-    formData.append('position', newProData.position); // Nuevo: Cargo
+    formData.append('position', newProData.position);
     formData.append('epsId', user.epsId);
-    
-    // Archivos
     if (newProData.resumeFile) formData.append('resumeFile', newProData.resumeFile);
-    if (newProData.fileHistory) formData.append('fileHistory', newProData.fileHistory);
 
     try {
-        const res = await apiFetch('/api/professionals', {
-            method: 'POST',
-            body: formData // Eliminamos los headers de 'Content-Type' para que el navegador fije el 'multipart/form-data' automáticamente
-        });
-
-        if(res.ok) {
-            toast.success("Profesional registrado exitosamente");
-            setShowProForm(false);
-            setNewProData({ fullName: '', email: '', identification: '', phone: '', position: '', resumeFile: null });
-            fetchData(); 
-        } else {
-            toast.error("Error al crear profesional");
-        }
-    } catch (e) { 
-        toast.error("Error de conexión"); 
+      const res = await apiFetch('/api/professionals', { method: 'POST', body: formData });
+      if (res.ok) {
+        toast.success('Profesional registrado.');
+        setShowProForm(false);
+        setNewProData({ fullName: '', email: '', identification: '', phone: '', position: '', resumeFile: null });
+        fetchData({ silent: true });
+      } else {
+        toast.error('No se pudo registrar al profesional.');
+      }
+    } catch {
+      toast.error('Sin conexión con el servidor.');
+    } finally {
+      setSaving(false);
     }
-};
+  };
 
+  const handleViewLogs = (persona) => {
+    const registros = [
+      ...logs.filter(l => l.patientId === persona.id || l.caregiverId === persona.id)
+        .map(l => ({ ...l, recordType: 'CUIDADOR' })),
+      ...visits.filter(v => v.patientId === persona.id)
+        .map(v => ({ ...v, recordType: 'PROFESIONAL' }))
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    setLogsModal({ nombre: persona.fullName, registros });
+  };
+
+  // Antes esto fijaba las visitas y el nombre pero nunca el profesional, así
+  // que el modal mostraba "No registrado" en cargo, contacto y hoja de vida
+  // aunque el dato existiera.
   const handleViewVisits = (pro) => {
-      const proVisits = visits.filter(v => v.professionalId === pro.id);
-      proVisits.sort((a, b) => new Date(b.date) - new Date(a.date));
-      setSelectedProVisits(proVisits);
-      setSelectedProName(pro.fullName);
-      setShowVisitsModal(true);
+    setSelectedPro(pro);
+    setVisitsModal({
+      nombre: pro.fullName,
+      visitas: visits
+        .filter(v => v.professionalId === pro.id)
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+    });
   };
 
-  // La lógica financiera vive ahora en ReportesFinancieros.jsx, que maneja
-  // reportes por tipo con líneas de gasto. Aquí solo se conserva la lista
-  // para el indicador de ejecución del tablero.
+  // --------------------------------------------------------------------------
+  // Filtros
+  // --------------------------------------------------------------------------
 
-  const handlePrint = () => {
-      const printContent = document.getElementById('printable-area');
-      const win = window.open('', '', 'height=800,width=1000');
-      win.document.write('<html><head><title>Imprimir</title>');
-      win.document.write(`
-          <style>
-            body { font-family: Arial, sans-serif; padding: 40px; color: #000; -webkit-print-color-adjust: exact; }
-            h1 { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; font-size: 24px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-            th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
-            th { background-color: #f0f0f0; font-weight: bold; }
-            .text-right { text-align: right; }
-          </style>
-      `);
-      win.document.write('</head><body>');
-      win.document.write(printContent.innerHTML);
-      win.document.write('</body></html>');
-      win.document.close();
-      win.print();
-  };
+  const term = searchTerm.trim().toLowerCase();
 
-  // --- FILTROS ---
-  const filteredCaregivers = caregivers.filter(c => 
-    c.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (c.identification && c.identification.includes(searchTerm))
-  );
+  const filteredCaregivers = useMemo(() => caregivers.filter(c =>
+    (c.fullName || '').toLowerCase().includes(term) ||
+    (c.identification || '').toString().includes(term)
+  ), [caregivers, term]);
+
+  // Antes se calculaba y no se usaba: la tabla iteraba `patients` y el
+  // buscador de la pestaña Pacientes no filtraba nada.
+  const filteredPatients = useMemo(() => patients.filter(p =>
+    (p.fullName || '').toLowerCase().includes(term) ||
+    (p.identification || '').toString().includes(term) ||
+    (p.diagnosis || '').toLowerCase().includes(term)
+  ), [patients, term]);
+
+  const filteredProfessionals = useMemo(() => professionals.filter(p =>
+    (p.fullName || '').toLowerCase().includes(term) ||
+    (p.identification || '').toString().includes(term) ||
+    (p.position || '').toLowerCase().includes(term)
+  ), [professionals, term]);
 
   const pendingRequests = filteredCaregivers.filter(c => c.status === 'PENDIENTE');
   const preselectedRequests = filteredCaregivers.filter(c => c.status === 'PRESELECCIONADO');
   const activeCaregivers = filteredCaregivers.filter(c => c.status === 'APROBADO');
 
+  const counts = {
+    METRICAS: null,
+    SOLICITUDES: caregivers.filter(c => c.status === 'PENDIENTE').length,
+    VALIDACION: caregivers.filter(c => c.status === 'PRESELECCIONADO').length,
+    ACTIVOS: caregivers.filter(c => c.status === 'APROBADO').length,
+    PACIENTES: patients.length,
+    PROFESIONALES: professionals.length,
+    FINANCIERO: null
+  };
 
+  const mostrarBuscador = !['METRICAS', 'FINANCIERO'].includes(activeTab);
 
-  
-  // Cálculo de datos para la gráfica de Estratos
-  const stratumChartData = [1, 2, 3, 4, 5, 6].map(level => {
-    
-    const currentPatients = typeof patients !== 'undefined' ? patients : []; 
-    
-    const count = currentPatients.filter(p => String(p.stratum) === String(level)).length;
-    
-    return {
-      name: `Est ${level}`,
-      cantidad: count
-    };
-  });
-// =======================================================
-  // LÓGICA DE BÚSQUEDA (PEGAR ESTO ANTES DEL ÚLTIMO RETURN)
-  // =======================================================
-  const filteredPatients = patients.filter(p => {
-      const term = searchTerm.toLowerCase();
-      // Buscamos por Nombre o por Diagnóstico
-      const nameMatch = p.fullName && p.fullName.toLowerCase().includes(term);
-      const docMatch = p.identification && p.identification.toString().includes(term);
-      const diagMatch = p.diagnosis && p.diagnosis.toLowerCase().includes(term);
-      
-      return nameMatch || docMatch || diagMatch;
-  });
-  // ==============================================================================
-  // 5. RENDERIZADO UI
-  // ==============================================================================
+  // --------------------------------------------------------------------------
+  // Render
+  // --------------------------------------------------------------------------
+
   return (
-    
-    
-    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans">
-      
-      {/* HEADER */}
-      <header className="bg-blue-900 text-white shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-wide">
-             PANEL ADMIN <span className="font-light text-blue-300">ELIGEME</span>
-            </h1>
-            <p className="text-xs text-blue-200 uppercase tracking-widest">Hospital/Alcaldía</p>
-          </div>
-          <div className="flex gap-4 items-center">
-             <div className="hidden md:block text-right mr-4">
-                
-                 <p className="text-xs text-blue-300">Administrador</p>
-             </div>
-             <button onClick={fetchData} className="text-sm bg-blue-800/50 border border-blue-700 px-3 py-1 rounded hover:bg-blue-700 transition flex items-center gap-1">
-                <span>↻</span>
-             </button>
-             <button onClick={onLogout} className="text-sm bg-red-600 hover:bg-red-700 px-4 py-2 rounded font-bold transition shadow-lg">
-                Salir
-             </button>
-          </div>
-        </div>
-        
-        
-       {/* NAV TABS */}
-        <div className="bg-white text-gray-600 border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-6 flex space-x-6 overflow-x-auto">
-            <TabBtn active={activeTab==='METRICAS'} onClick={()=>setActiveTab('METRICAS')} label="Estadísticas" count={0} icon={<MdBarChart />}/>
-            <TabBtn active={activeTab==='SOLICITUDES'} onClick={()=>setActiveTab('SOLICITUDES')} label="Solicitudes" count={pendingRequests.length} icon={<MdMail />}/>
-            <TabBtn active={activeTab==='VALIDACION'} onClick={()=>setActiveTab('VALIDACION')} label="Validación" count={preselectedRequests.length} icon={<MdFolderOpen />}/>
-            <TabBtn active={activeTab==='ACTIVOS'} onClick={()=>setActiveTab('ACTIVOS')} label="Cuidadores" count={activeCaregivers.length} icon={<MdHealthAndSafety />}/>
-            <TabBtn active={activeTab==='PACIENTES'} onClick={()=>setActiveTab('PACIENTES')} label="Pacientes" count={patients.length} icon={<MdLocalHospital />}/>
-            
-            {/* AQUÍ ESTÁ LA CORRECCIÓN: Usando MdMedicalServices en lugar del anterior */}
-            <TabBtn active={activeTab==='PROFESIONALES'} onClick={()=>setActiveTab('PROFESIONALES')} label="Profesionales" count={professionals.length} icon={<MdMedicalServices />}/>
-            
-            {/* Los tres reportes viven dentro de esta pestaña, como cajones */}
-            <TabBtn active={activeTab==='FINANCIERO'} onClick={()=>{setActiveTab('FINANCIERO'); setReporteAbierto(null);}} label="Reportes" icon={<MdFolderOpen />}/>
+    <div className="min-h-screen bg-ink-50">
+
+      <header className="sticky top-0 z-40 shadow-e2">
+        <div className="bg-brand-800 text-white on-brand">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold tracking-tight text-white truncate">
+                ELÍGEME
+                {/* El sufijo se cae en pantallas angostas: truncado dejaba
+                    "Panel administrat…" cortado a mitad de palabra. */}
+                <span className="font-normal text-brand-200 hidden sm:inline"> · Panel administrativo</span>
+              </h1>
+              <p className="text-xs text-brand-200 mt-0.5 truncate">
+                Hospital y Alcaldía de Támesis
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={() => fetchData({ silent: true })}
+                loading={refreshing}
+                icon={<MdRefresh />}
+                className="text-brand-100 hover:bg-white/10 hover:text-white"
+              >
+                <span className="hidden sm:inline">Actualizar</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={onLogout}
+                icon={<MdLogout />}
+                className="text-brand-100 hover:bg-white/10 hover:text-white"
+              >
+                <span className="hidden sm:inline">Salir</span>
+              </Button>
+            </div>
           </div>
         </div>
+
+        <NavTabs tabs={TABS} counts={counts} active={activeTab} onChange={(id) => {
+          setActiveTab(id);
+          if (id === 'FINANCIERO') setReporteAbierto(null);
+        }} />
       </header>
 
-      {/* MAIN CONTENT */}
-      <main className="max-w-7xl mx-auto p-6">
-        
-        {activeTab !== 'FINANCIERO' && activeTab !== 'METRICAS' && (
-            <div className="mb-6 flex justify-end">
-                <div className="relative w-full max-w-xs">
-                    <input 
-                        type="text" 
-                        placeholder="Buscar..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="p-2 pl-3 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                    <span className="absolute right-3 top-2 text-gray-400">🔍</span>
-                </div>
-            </div>
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+
+        {loadError && (
+          <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-risk-border bg-risk-soft px-4 py-3">
+            <MdWarning aria-hidden="true" className="text-lg text-risk shrink-0" />
+            <p className="text-sm text-risk-strong flex-1">{loadError}</p>
+            <Button variant="secondary" size="sm" onClick={() => fetchData()}>Reintentar</Button>
+          </div>
         )}
-        {/* VISTA: ESTADÍSTICAS Y MÉTRICAS */}
+
+        {mostrarBuscador && (
+          <div className="mb-5 flex justify-end">
+            <SearchInput
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nombre, cédula o diagnóstico…"
+              className="w-full sm:max-w-sm"
+            />
+          </div>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Estadísticas                                                     */}
+        {/* ---------------------------------------------------------------- */}
         {activeTab === 'METRICAS' && (
-            <div className="animate-fadeIn space-y-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">Tablero de Control e Indicadores</h2>
-                
-                {/* 1. KPIs Superiores */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-500">
-                        <p className="text-gray-500 text-xs font-bold uppercase">Pacientes Totales</p>
-                        <p className="text-3xl font-bold text-gray-800">{patients.length}</p>
-                    </div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-green-500">
-                        <p className="text-gray-500 text-xs font-bold uppercase">Cobertura Cuidadores</p>
-                        <p className="text-3xl font-bold text-green-600">{stats.coveragePercent}%</p>
-                        <p className="text-xs text-gray-400">Pacientes asignados</p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => setShowComplianceDetail(true)}
-                        className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-yellow-500 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                    >
-                        <p className="text-gray-500 text-xs font-bold uppercase">Bitácoras (7 días)</p>
-                        <p className={`text-3xl font-bold ${stats.logCompliance >= 80 ? 'text-green-600' : 'text-yellow-600'}`}>{stats.logCompliance}%</p>
-                        <p className="text-xs text-blue-600 font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
-                            Ver quién cumple <span>→</span>
-                        </p>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setShowVisitsDetail(true)}
-                        className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group focus:outline-none focus:ring-2 focus:ring-purple-400"
-                    >
-                        <p className="text-gray-500 text-xs font-bold uppercase">Visitas (5 días)</p>
-                        <p className={`text-3xl font-bold ${stats.visitOpportunity >= 90 ? 'text-green-600' : 'text-purple-600'}`}>{stats.visitOpportunity}%</p>
-                        <p className="text-xs text-blue-600 font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
-                            Ver total de visitas <span>→</span>
-                        </p>
-                    </button>
+          <div className="space-y-6">
+            <SectionTitle
+              title="Tablero de control"
+              description="Cada cifra sale de un registro hecho en la plataforma. Los porcentajes muestran la operación con la que se calcularon; donde no hay base para calcular, dice «Sin registrar»."
+            />
+
+            {loading ? (
+              <>
+                <StatGridSkeleton count={4} />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  <ChartSkeleton />
+                  <ChartSkeleton />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 stagger">
+                  <StatCard
+                    label="Pacientes registrados"
+                    value={stats.totalPatients}
+                    formula="Filas de paciente creadas en la plataforma."
+                  />
+                  <StatCard
+                    label="Cobertura de cuidadores"
+                    value={stats.coveragePercent}
+                    unit="%"
+                    formula={`${stats.assigned} con cuidador ÷ ${stats.totalPatients} registrados`}
+                    hint="Se calcula cuando haya al menos un paciente registrado."
+                  />
+                  <StatCard
+                    label="Bitácoras · 7 días"
+                    value={stats.logCompliance}
+                    unit="%"
+                    formula={`${stats.recentLogs} registradas ÷ ${stats.expectedLogs} esperadas (1 diaria × ${stats.assigned} pacientes asignados × 7 días)`}
+                    hint="Se calcula cuando haya pacientes asignados a un cuidador."
+                    onClick={() => setShowComplianceDetail(true)}
+                    actionLabel="Ver cuidador por cuidador"
+                  />
+                  <StatCard
+                    label="Visitas · 5 días"
+                    value={stats.visitOpportunity}
+                    unit="%"
+                    formula={`${stats.patientsOnTime} pacientes con visita en los últimos 5 días ÷ ${stats.totalPatients} registrados`}
+                    hint="Se calcula cuando haya al menos un paciente registrado."
+                    onClick={() => setShowVisitsDetail(true)}
+                    actionLabel="Ver el detalle de visitas"
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* 2. Distribución por Estratos (NUEVO CON RECHARTS) */}
-<div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-    <h3 className="font-bold text-gray-800 mb-4">Población por Estrato</h3>
-    
-    <div className="h-[300px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-            <BarChart 
-                data={stratumChartData} 
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-            >
-                {/* Cuadrícula de fondo suave */}
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                
-                {/* Eje X (Estrato 1, 2, 3...) */}
-                <XAxis 
-                    dataKey="name" 
-                    tick={{fontSize: 12, fill: '#6B7280'}} 
-                    axisLine={false} 
-                    tickLine={false} 
-                />
-                
-                {/* Eje Y (Cantidades) */}
-                <YAxis 
-                    tick={{fontSize: 12, fill: '#6B7280'}} 
-                    axisLine={false} 
-                    tickLine={false} 
-                />
-                
-                {/* Tooltip flotante al pasar el mouse */}
-                <Tooltip 
-                    cursor={{fill: '#F3F4F6'}}
-                    contentStyle={{
-                        borderRadius: '8px', 
-                        border: 'none', 
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }} 
-                />
-                
-                {/* Las Barras Azules (Indigo-500) */}
-                <Bar 
-                    dataKey="cantidad" 
-                    fill="#6366F1" 
-                    radius={[4, 4, 0, 0]} 
-                    barSize={40} 
-                    animationDuration={1500}
-                />
-            </BarChart>
-        </ResponsiveContainer>
-    </div>
-</div>
-                    {/* 3. Top Diagnósticos */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                        <h3 className="font-bold text-gray-800 mb-4">Top 5 Patologías</h3>
-                        <div className="space-y-4">
-                            {stats.sortedDiagnoses.map(([name, count], idx) => (
-                                <div key={idx} className="relative">
-                                    <div className="flex justify-between text-sm mb-1 z-10 relative">
-                                        <span className="font-medium text-gray-700">{name}</span>
-                                        <span className="font-bold text-gray-900">{count}</span>
-                                    </div>
-                                    <div className="w-full bg-gray-100 rounded-full h-2.5">
-                                        <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${(count / patients.length) * 100}%` }}></div>
-                                    </div>
-                                </div>
-                            ))}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                  <Card>
+                    <CardHeader
+                      title="Población por estrato"
+                      description={`${stats.totalPatients} pacientes registrados`}
+                    />
+                    <CardBody>
+                      {stats.totalPatients === 0 ? (
+                        <p className="py-14 text-center text-sm"><SinRegistrar /></p>
+                      ) : (
+                        <div className="h-[280px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={stratumChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                              <CartesianGrid {...rejilla} />
+                              <XAxis dataKey="corto" {...ejeX} />
+                              <YAxis {...ejeY} />
+                              <Tooltip
+                                {...tooltipEstilo}
+                                formatter={(v) => [`${v} paciente${v === 1 ? '' : 's'}`, '']}
+                                labelFormatter={(_, p) => p?.[0]?.payload?.name ?? ''}
+                              />
+                              <Bar dataKey="cantidad" radius={[4, 4, 0, 0]} maxBarSize={44} animationDuration={ANIM_MS} />
+                            </BarChart>
+                          </ResponsiveContainer>
                         </div>
-                    </div>
+                      )}
+                    </CardBody>
+                  </Card>
 
-                    {/* 4. Grupos de Edad */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                         <h3 className="font-bold text-gray-800 mb-4">Grupos de Edad</h3>
-                         <div className="flex justify-around items-center py-4">
-                             <div className="text-center">
-                                 <div className="w-16 h-16 rounded-full border-4 border-blue-200 flex items-center justify-center bg-blue-50 font-bold text-blue-700 mx-auto mb-2">{stats.ageGroups.pediatrico}</div>
-                                 <p className="text-xs text-gray-400">0-18 años</p>
-                             </div>
-                             <div className="text-center">
-                                 <div className="w-16 h-16 rounded-full border-4 border-indigo-200 flex items-center justify-center bg-indigo-50 font-bold text-indigo-700 mx-auto mb-2">{stats.ageGroups.adulto}</div>
-                                 <p className="text-xs text-gray-400">19-59 años</p>
-                             </div>
-                             <div className="text-center">
-                                 <div className="w-16 h-16 rounded-full border-4 border-orange-200 flex items-center justify-center bg-orange-50 font-bold text-orange-700 mx-auto mb-2">{stats.ageGroups.geriatrico}</div>
-                                 <p className="text-xs text-gray-400">60+ años</p>
-                             </div>
-                         </div>
-                    </div>
+                  <Card>
+                    <CardHeader
+                      title="Diagnósticos más frecuentes"
+                      description="Las cinco condiciones con más pacientes registrados"
+                    />
+                    <CardBody>
+                      <BarList
+                        items={stats.sortedDiagnoses.map(([label, value]) => ({ label, value }))}
+                        total={stats.totalPatients}
+                        emptyLabel="Sin diagnósticos registrados"
+                      />
+                    </CardBody>
+                  </Card>
 
-                    {/* 5. Donut Cobertura */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center justify-center">
-                         <h3 className="font-bold text-gray-800 mb-2 w-full text-left">Estado Cobertura</h3>
-                         <div className="relative w-32 h-32 rounded-full border-8 border-gray-100" style={{background: `conic-gradient(#10b981 ${stats.coveragePercent}%, #ef4444 0)`}}>
-                             <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
-                                 <span className="text-xl font-bold">{stats.coveragePercent}%</span>
-                             </div>
-                         </div>
-                    </div>
+                  <Card>
+                    <CardHeader
+                      title="Grupos de edad"
+                      description={stats.conEdad < stats.totalPatients
+                        ? `${stats.conEdad} de ${stats.totalPatients} pacientes tienen edad registrada`
+                        : `${stats.conEdad} pacientes con edad registrada`}
+                    />
+                    <CardBody>
+                      <OrdinalSplit
+                        total={stats.conEdad}
+                        segments={[
+                          { label: '0 a 18 años',  value: stats.ageGroups.pediatrico, color: RAMPA_ORDINAL[0] },
+                          { label: '19 a 59 años', value: stats.ageGroups.adulto,     color: RAMPA_ORDINAL[2] },
+                          { label: '60 años o más', value: stats.ageGroups.geriatrico, color: RAMPA_ORDINAL[4] }
+                        ]}
+                      />
+                    </CardBody>
+                  </Card>
+
+                  <Card>
+                    <CardHeader title="Estado de la cobertura" />
+                    <CardBody className="space-y-5">
+                      <Meter
+                        label="Pacientes con cuidador asignado"
+                        value={stats.assigned}
+                        total={stats.totalPatients}
+                        formula={stats.coveragePercent !== null
+                          ? `${stats.assigned} ÷ ${stats.totalPatients} = ${stats.coveragePercent}%`
+                          : null}
+                      />
+                      {stats.unassigned > 0 && (
+                        <p className="flex items-start gap-2.5 rounded-md bg-warn-soft border border-warn-border px-3.5 py-3 text-sm text-warn-strong">
+                          <MdWarning aria-hidden="true" className="text-base shrink-0 mt-0.5" />
+                          <span>
+                            <strong className="font-semibold">{stats.unassigned}</strong>{' '}
+                            {stats.unassigned === 1 ? 'persona registrada no tiene' : 'personas registradas no tienen'}{' '}
+                            cuidador asignado.
+                          </span>
+                        </p>
+                      )}
+                      {stats.executionPercent !== null && (
+                        <div className="pt-5 border-t border-ink-100">
+                          <Meter
+                            label="Ejecución presupuestal"
+                            value={stats.executionPercent}
+                            total={100}
+                            formula="Total ejecutado ÷ total asignado en los reportes financieros"
+                          />
+                        </div>
+                      )}
+                    </CardBody>
+                  </Card>
                 </div>
-
-                {/* ============================================================ */}
-                {/* MODAL: DETALLE DE BITÁCORAS (7 DÍAS)                         */}
-                {/* ============================================================ */}
-                {showComplianceDetail && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                        <div className="bg-white w-full max-w-5xl h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-
-                            <div className="bg-yellow-500 text-white px-6 py-4 flex justify-between items-center shrink-0">
-                                <div>
-                                    <h3 className="text-xl font-bold flex items-center gap-2">
-                                        <MdEditNote className="text-2xl" /> Cumplimiento de Bitácoras
-                                    </h3>
-                                    <p className="text-yellow-50 text-sm">
-                                        Últimos 7 días · se exige una bitácora diaria por paciente asignado
-                                    </p>
-                                </div>
-                                <button onClick={() => setShowComplianceDetail(false)} className="text-white/70 hover:text-white text-3xl leading-none">
-                                    <MdClose />
-                                </button>
-                            </div>
-
-                            {/* Resumen */}
-                            <div className="grid grid-cols-3 gap-px bg-gray-200 shrink-0">
-                                <div className="bg-white p-4 text-center">
-                                    <p className="text-2xl font-bold text-gray-800">{logDetail.filas.length}</p>
-                                    <p className="text-xs text-gray-500 uppercase font-bold">Cuidadores evaluados</p>
-                                </div>
-                                <div className="bg-white p-4 text-center">
-                                    <p className="text-2xl font-bold text-green-600">{logDetail.cumplen.length}</p>
-                                    <p className="text-xs text-gray-500 uppercase font-bold">Cumplen (≥{UMBRAL_CUMPLIMIENTO}%)</p>
-                                </div>
-                                <div className="bg-white p-4 text-center">
-                                    <p className="text-2xl font-bold text-red-600">{logDetail.incumplen.length}</p>
-                                    <p className="text-xs text-gray-500 uppercase font-bold">No cumplen</p>
-                                </div>
-                            </div>
-
-                            <div className="flex-1 overflow-auto p-6 bg-gray-50">
-                                {logDetail.filas.length === 0 ? (
-                                    <div className="text-center py-16 text-gray-400">
-                                        <p className="font-medium">No hay cuidadores con pacientes asignados.</p>
-                                        <p className="text-sm mt-1">Asigna pacientes para poder medir el cumplimiento.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {logDetail.filas.map(fila => {
-                                            const cumple = fila.percent >= UMBRAL_CUMPLIMIENTO;
-                                            return (
-                                                <div
-                                                    key={fila.caregiverId}
-                                                    className={`bg-white rounded-xl border-l-4 p-4 shadow-sm ${cumple ? 'border-green-500' : 'border-red-500'}`}
-                                                >
-                                                    <div className="flex flex-wrap justify-between items-start gap-4">
-                                                        <div className="min-w-0">
-                                                            <p className="font-bold text-gray-800 flex items-center gap-2">
-                                                                {cumple
-                                                                    ? <MdCheckCircle className="text-green-500 shrink-0" />
-                                                                    : <MdWarning className="text-red-500 shrink-0" />}
-                                                                {fila.name}
-                                                            </p>
-                                                            <p className="text-xs text-gray-500 mt-0.5">
-                                                                C.C. {fila.identification} · {fila.pacientes.length} paciente(s): {fila.pacientes.map(p => p.fullName).join(', ')}
-                                                            </p>
-                                                        </div>
-
-                                                        <div className="text-right shrink-0">
-                                                            <p className={`text-2xl font-bold ${cumple ? 'text-green-600' : 'text-red-600'}`}>
-                                                                {fila.percent}%
-                                                            </p>
-                                                            <p className="text-xs text-gray-500">
-                                                                {fila.registradas} de {fila.esperado} bitácoras
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Semáforo día por día */}
-                                                    <div className="flex gap-1.5 mt-3">
-                                                        {fila.dias.map(d => (
-                                                            <div key={d.key} className="flex-1 text-center" title={`${d.cubiertos} de ${d.total} bitácoras`}>
-                                                                <div
-                                                                    className={`h-8 rounded flex items-center justify-center text-xs font-bold ${
-                                                                        d.completo
-                                                                            ? 'bg-green-500 text-white'
-                                                                            : d.cubiertos > 0
-                                                                                ? 'bg-yellow-400 text-yellow-900'
-                                                                                : 'bg-gray-200 text-gray-400'
-                                                                    }`}
-                                                                >
-                                                                    {d.cubiertos}/{d.total}
-                                                                </div>
-                                                                <p className="text-[10px] text-gray-400 mt-1 capitalize">{d.label} {d.dayNum}</p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="border-t bg-white px-6 py-3 flex justify-between items-center shrink-0 text-xs text-gray-500">
-                                <div className="flex gap-4">
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-500 inline-block"></span> Día completo</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-400 inline-block"></span> Parcial</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-200 inline-block"></span> Sin bitácora</span>
-                                </div>
-                                <button onClick={() => setShowComplianceDetail(false)} className="bg-gray-800 text-white px-5 py-2 rounded-lg font-bold hover:bg-gray-900 transition">
-                                    Cerrar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* ============================================================ */}
-                {/* MODAL: DETALLE DE VISITAS (5 DÍAS)                           */}
-                {/* ============================================================ */}
-                {showVisitsDetail && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                        <div className="bg-white w-full max-w-5xl h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-
-                            <div className="bg-purple-600 text-white px-6 py-4 flex justify-between items-center shrink-0">
-                                <div>
-                                    <h3 className="text-xl font-bold flex items-center gap-2">
-                                        <MdMedicalServices className="text-2xl" /> Total de Visitas Realizadas
-                                    </h3>
-                                    <p className="text-purple-100 text-sm">
-                                        Oportunidad médica medida sobre una ventana de 5 días
-                                    </p>
-                                </div>
-                                <button onClick={() => setShowVisitsDetail(false)} className="text-white/70 hover:text-white text-3xl leading-none">
-                                    <MdClose />
-                                </button>
-                            </div>
-
-                            {/* Resumen */}
-                            <div className="grid grid-cols-3 gap-px bg-gray-200 shrink-0">
-                                <div className="bg-white p-4 text-center">
-                                    <p className="text-2xl font-bold text-gray-800">{visitsDetail.totalVisitas}</p>
-                                    <p className="text-xs text-gray-500 uppercase font-bold">Visitas históricas</p>
-                                </div>
-                                <div className="bg-white p-4 text-center">
-                                    <p className="text-2xl font-bold text-purple-600">{visitsDetail.totalRecientes}</p>
-                                    <p className="text-xs text-gray-500 uppercase font-bold">En los últimos 5 días</p>
-                                </div>
-                                <div className="bg-white p-4 text-center">
-                                    <p className="text-2xl font-bold text-green-600">
-                                        {visitsDetail.pacientesAlDia}/{patients.length}
-                                    </p>
-                                    <p className="text-xs text-gray-500 uppercase font-bold">Pacientes al día</p>
-                                </div>
-                            </div>
-
-                            <div className="flex-1 overflow-auto p-6 bg-gray-50 space-y-8">
-
-                                {/* Visitas por profesional */}
-                                <div>
-                                    <h4 className="font-bold text-gray-800 mb-3">Visitas por profesional</h4>
-                                    {visitsDetail.filasPro.length === 0 ? (
-                                        <p className="text-gray-400 text-sm bg-white rounded-xl p-6 text-center">
-                                            Todavía no se ha registrado ninguna visita.
-                                        </p>
-                                    ) : (
-                                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                                            <table className="w-full text-sm">
-                                                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                                                    <tr>
-                                                        <th className="text-left px-4 py-3 font-bold">Profesional</th>
-                                                        <th className="text-center px-4 py-3 font-bold">Total</th>
-                                                        <th className="text-center px-4 py-3 font-bold">Últimos 5 días</th>
-                                                        <th className="text-right px-4 py-3 font-bold">Última visita</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {visitsDetail.filasPro.map(pro => (
-                                                        <tr key={pro.id} className="hover:bg-gray-50">
-                                                            <td className="px-4 py-3">
-                                                                <p className="font-medium text-gray-800">{pro.name}</p>
-                                                                <p className="text-xs text-gray-400">{pro.position}</p>
-                                                            </td>
-                                                            <td className="text-center px-4 py-3 font-bold text-gray-800">{pro.total}</td>
-                                                            <td className="text-center px-4 py-3">
-                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${pro.recientes > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                                    {pro.recientes}
-                                                                </span>
-                                                            </td>
-                                                            <td className="text-right px-4 py-3 text-gray-500 text-xs">
-                                                                {pro.ultima ? pro.ultima.toLocaleDateString('es-CO') : '—'}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Estado por paciente */}
-                                <div>
-                                    <h4 className="font-bold text-gray-800 mb-3">Estado por paciente</h4>
-                                    {visitsDetail.filasPaciente.length === 0 ? (
-                                        <p className="text-gray-400 text-sm bg-white rounded-xl p-6 text-center">
-                                            No hay pacientes registrados.
-                                        </p>
-                                    ) : (
-                                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                                            <table className="w-full text-sm">
-                                                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                                                    <tr>
-                                                        <th className="text-left px-4 py-3 font-bold">Paciente</th>
-                                                        <th className="text-center px-4 py-3 font-bold">Visitas totales</th>
-                                                        <th className="text-right px-4 py-3 font-bold">Última visita</th>
-                                                        <th className="text-right px-4 py-3 font-bold">Estado</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {visitsDetail.filasPaciente.map(p => (
-                                                        <tr key={p.id} className="hover:bg-gray-50">
-                                                            <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
-                                                            <td className="text-center px-4 py-3 font-bold text-gray-800">{p.total}</td>
-                                                            <td className="text-right px-4 py-3 text-gray-500 text-xs">
-                                                                {p.ultima
-                                                                    ? `${p.ultima.toLocaleDateString('es-CO')} (hace ${p.diasSin} d)`
-                                                                    : 'Nunca visitado'}
-                                                            </td>
-                                                            <td className="text-right px-4 py-3">
-                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${p.alDia ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                                    {p.alDia ? 'Al día' : 'Pendiente'}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="border-t bg-white px-6 py-3 flex justify-end shrink-0">
-                                <button onClick={() => setShowVisitsDetail(false)} className="bg-gray-800 text-white px-5 py-2 rounded-lg font-bold hover:bg-gray-900 transition">
-                                    Cerrar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
+              </>
+            )}
+          </div>
         )}
-      {/* -------------------------------------------------------- */}
-        {/* SECCIÓN 1: SOLICITUDES                                   */}
-        {/* -------------------------------------------------------- */}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Solicitudes                                                      */}
+        {/* ---------------------------------------------------------------- */}
         {activeTab === 'SOLICITUDES' && (
-          <div className="grid grid-cols-1 gap-4 animate-fadeIn">
-             <h2 className="text-xl font-bold mb-2 text-gray-700">Postulaciones Recientes</h2>
-             {pendingRequests.length === 0 ? (
-                 <div className="text-center py-10 bg-white rounded-lg shadow-sm border border-gray-100"><p className="text-gray-400">No hay solicitudes pendientes.</p></div>
-             ) : (
-               pendingRequests.map(req => (
-                 <div key={req.id} className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-yellow-400 flex flex-col md:flex-row justify-between items-center hover:shadow-md transition">
-                    <div className="mb-4 md:mb-0">
-                       <h3 className="font-bold text-lg text-gray-800">{req.fullName}</h3>
-                       <div className="text-sm text-gray-500 flex gap-4 mt-1"><span>🆔 {req.identification}</span><span>📧 {req.email}</span></div>
+          <div>
+            <SectionTitle
+              title="Postulaciones recientes"
+              description="Aspirantes que enviaron su solicitud y esperan una primera revisión."
+            />
+            {loading ? <ListSkeleton rows={3} /> : pendingRequests.length === 0 ? (
+              <EmptyState
+                icon={<MdInbox />}
+                title={term ? 'Ninguna postulación coincide con la búsqueda' : 'No hay postulaciones pendientes'}
+                description={term
+                  ? 'Prueba con otro nombre o número de cédula.'
+                  : 'Cuando alguien se postule desde el formulario público, aparecerá aquí.'}
+              />
+            ) : (
+              <div className="space-y-3 stagger">
+                {pendingRequests.map(req => (
+                  <Card key={req.id} className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-semibold text-ink-900">{req.fullName}</h3>
+                      <p className="text-sm text-ink-500 mt-1">
+                        C.C. {req.identification || 'sin registrar'} · {req.email || 'sin correo'}
+                      </p>
                     </div>
-                    {/* AQUÍ ESTÁ EL CAMBIO CLAVE: Usamos openCandidateDetail en lugar de setSelectedCaregiver */}
-                    <button onClick={() => openCandidateDetail(req)} className="bg-blue-50 text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-blue-100 border border-blue-200 transition">
-                        Revisar Perfil Completo
-                    </button>
-                 </div>
-               ))
-             )}
+                    <Button
+                      variant="primary"
+                      icon={<MdRemoveRedEye />}
+                      onClick={() => setSelectedCandidate(req)}
+                      className="sm:shrink-0"
+                    >
+                      Revisar hoja de vida
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-      {/* -------------------------------------------------------- */}
-        {/* SECCIÓN 2: VALIDACIÓN (Código Actualizado)               */}
-        {/* -------------------------------------------------------- */}
+        {/* ---------------------------------------------------------------- */}
+        {/* Validación                                                       */}
+        {/* ---------------------------------------------------------------- */}
         {activeTab === 'VALIDACION' && (
-          <div className="grid grid-cols-1 gap-4 animate-fadeIn">
-             <h2 className="text-xl font-bold mb-2 text-gray-700">Validación de Documentos</h2>
-             
-             {preselectedRequests.length === 0 ? (
-                <div className="text-center py-10 bg-white rounded-lg shadow-sm">
-                   <p className="text-gray-400">Sin validaciones pendientes.</p>
-                </div>
-             ) : (
-                preselectedRequests.map(user => (
-                  <div key={user.id} className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-orange-400 flex flex-col md:flex-row justify-between items-center">
-                     
-                     {/* COLUMNA IZQUIERDA: INFORMACIÓN BÁSICA */}
-                     <div>
-                        <h3 className="font-bold text-lg text-gray-800">{user.fullName}</h3>
-                        <p className="text-sm text-gray-500 mb-2">C.C. {user.identification || 'No registrada'}</p>
-                        
-                        <div className="mt-3 flex flex-wrap gap-2">
-                           {/* Lógica para ver el archivo PDF cargado */}
-                           {user.senaFile ? (
-                               <a 
-                                 href={fileUrl(user.senaFile)}
-                                 target="_blank" 
-                                 rel="noreferrer" 
-                                 className="inline-flex items-center gap-2 text-blue-600 font-bold hover:text-blue-800 underline bg-blue-50 px-3 py-1 rounded transition"
-                               >
-                                 📄 Ver Documento Cargado
-                               </a>
-                           ) : (
-                               <span className="text-orange-600 text-xs font-bold px-3 py-1 bg-orange-100 rounded">
-                                 ⏳ Esperando archivo...
-                               </span>
-                           )}
-                        </div>
-                     </div>
-
-                     {/* COLUMNA DERECHA: BOTONES DE ACCIÓN */}
-                     <div className="flex flex-wrap gap-2 mt-4 md:mt-0 items-center justify-end">
-                         
-                         {/* 1. NUEVO BOTÓN: VER HOJA DE VIDA COMPLETA */}
-                         <button 
-                            onClick={() => openCandidateDetail(user)} className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg font-bold flex items-center gap-2 transition shadow-sm">
-                                    <MdRemoveRedEye className="text-lg"/> Ver Hoja de Vida
-                         </button>
-
-                         {/* 2. RECHAZAR */}
-                         <button 
-                             onClick={() => handleStatusChange(user.id, 'RECHAZADO')} 
-                             className="px-4 py-2 border border-red-200 text-red-600 rounded-lg font-bold hover:bg-red-50 transition"
-                         >
-                             Rechazar
-                         </button>
-                         
-                         {/* 3. APROBAR (Solo habilitado si ya subió el archivo) */}
-                         {user.senaFile ? (
-                             <button 
-                                 onClick={() => handleStatusChange(user.id, 'APROBADO')} 
-                                 className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-md transition transform hover:-translate-y-0.5"
-                             >
-                                 ✓ Aprobar
-                             </button>
-                         ) : (
-                             <button 
-                                 disabled 
-                                 className="px-6 py-2 bg-gray-200 text-gray-400 font-bold rounded-lg cursor-not-allowed border border-gray-300"
-                             >
-                                 Falta Archivo
-                             </button>
-                         )}
-                     </div>
-                  </div>
-                ))
-             )}
-          </div>
-        )}
-          {/* -------------------------------------------------------- */}
-        {/* SECCIÓN 3: ACTIVOS                                       */}
-        {/* -------------------------------------------------------- */}
-        {activeTab === 'ACTIVOS' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
-            {activeCaregivers.length === 0 && <p className="text-gray-500 col-span-3 text-center py-10">No hay cuidadores activos.</p>}
-            {activeCaregivers.map(caregiver => {
-                const assignedPatient = patients.find(p => p.caregiverId === caregiver.id);
-                return (
-                  <div key={caregiver.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col h-full hover:shadow-lg transition">
-                    <div className="flex justify-between items-start mb-3">
-                        <div>
-                            <h3 className="font-bold text-gray-900 text-lg">{caregiver.fullName}</h3>
-                            <p className="text-xs text-gray-400">ID: {caregiver.identification}</p>
-                        </div>
-                        <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-bold">ACTIVO</span>
-                    </div>
-                    
-                    <div className="mb-4 bg-gray-100 p-2 rounded text-center">
-                        <p className="text-xs text-gray-500 font-bold uppercase">Código Acceso</p>
-                        <p className="font-mono font-bold text-gray-800">{caregiver.accessCode}</p>
-                    </div>
-                    
-                    <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100 mb-4 flex-1">
-                        <p className="text-xs font-bold text-blue-400 uppercase mb-2">Paciente Asignado</p>
-                        {assignedPatient ? (
-                            <div className="flex justify-between items-center">
-                                <div><p className="text-blue-900 font-bold text-sm">{assignedPatient.fullName}</p></div>
-                                <span className="text-xl">👴</span>
-                            </div>
+          <div>
+            <SectionTitle
+              title="Validación de documentos"
+              description="Aspirantes preseleccionados. Para aprobar la contratación se exige el diploma o certificado cargado."
+            />
+            {loading ? <ListSkeleton rows={3} /> : preselectedRequests.length === 0 ? (
+              <EmptyState
+                icon={<MdFolderOpen />}
+                title={term ? 'Nadie coincide con la búsqueda' : 'No hay validaciones pendientes'}
+                description={term
+                  ? 'Prueba con otro nombre o número de cédula.'
+                  : 'Los aspirantes preseleccionados desde Solicitudes aparecerán aquí.'}
+              />
+            ) : (
+              <div className="space-y-3 stagger">
+                {preselectedRequests.map(aspirante => (
+                  <Card key={aspirante.id} className="p-5 flex flex-col lg:flex-row lg:items-center gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-semibold text-ink-900">{aspirante.fullName}</h3>
+                      <p className="text-sm text-ink-500 mt-1">
+                        C.C. {aspirante.identification || 'sin registrar'}
+                      </p>
+                      <div className="mt-3">
+                        {aspirante.senaFile ? (
+                          <a
+                            href={fileUrl(aspirante.senaFile)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 min-h-9 text-sm font-medium text-brand-700 hover:text-brand-800 underline underline-offset-2"
+                          >
+                            <MdInsertDriveFile aria-hidden="true" />
+                            Ver documento cargado
+                          </a>
                         ) : (
-                            <button onClick={()=>{setCaregiverToAssign(caregiver); setShowAssignModal(true)}} className="text-xs bg-blue-600 text-white px-3 py-1 rounded w-full shadow hover:bg-blue-700 transition">+ Asignar Paciente</button>
+                          <Badge tone="warn" icon={<MdWarning />}>Esperando el archivo</Badge>
                         )}
+                      </div>
                     </div>
-                    
-                    <div className="flex gap-3 mt-auto">
-                        {/* CAMBIO CLAVE 1: Usamos openCandidateDetail para ver el perfil enriquecido */}
-                        <button onClick={() => openCandidateDetail(caregiver)} className="flex-1 flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-2 rounded text-sm font-bold hover:bg-gray-200 border border-gray-200 transition">
-                            <MdRemoveRedEye className="text-lg"/> Perfil Completo
-                        </button>
-                        {/* CAMBIO CLAVE 2: Mantenemos handleViewLogs que abre el historial completo de bitácoras */}
-                        <button onClick={() => handleViewLogs(caregiver)} className="flex-1 bg-blue-600 text-white py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-md transition">
-                            📋 Ver Bitácoras
-                        </button>
+
+                    <div className="flex flex-wrap gap-2.5 lg:shrink-0">
+                      <Button variant="secondary" icon={<MdRemoveRedEye />} onClick={() => setSelectedCandidate(aspirante)}>
+                        Hoja de vida
+                      </Button>
+                      <Button variant="risk" onClick={() => handleStatusChange(aspirante.id, 'RECHAZADO')}>
+                        Rechazar
+                      </Button>
+                      <Button
+                        variant="ok"
+                        icon={<MdVerified />}
+                        disabled={!aspirante.senaFile}
+                        onClick={() => handleStatusChange(aspirante.id, 'APROBADO')}
+                        title={aspirante.senaFile ? undefined : 'Falta el documento de formación'}
+                      >
+                        Aprobar
+                      </Button>
                     </div>
-                  </div>
-                );
-            })}
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* -------------------------------------------------------- */}
-        {/* SECCIÓN 4: PACIENTES                                     */}
-        {/* -------------------------------------------------------- */}
-        {activeTab === 'PACIENTES' && (
-           <div className="animate-fadeIn">
-              <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold text-gray-800">Listado Maestro</h2>
-                  <button onClick={()=>setShowPatientForm(true)} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-green-700">+ Nuevo Paciente</button>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-200">
-                          <tr>
-                              <th className="p-4">Nombre</th>
-                              <th className="p-4">Estrato</th>
-                              <th className="p-4">Diagnóstico</th>
-                              <th className="p-4">Cuidador</th>
-                              <th className="p-4">Estado</th>
-                              <th className="p-4 text-center">Acciones</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                          {patients.map(p => {
-                              // Aseguramos la coincidencia del ID del cuidador
-                              const assigned = caregivers.find(c => String(c.id) === String(p.caregiverId));
-                              return (
-                                  <tr key={p.id} className="hover:bg-gray-50">
-                                      <td className="p-4 font-medium">{p.fullName} <span className="text-gray-400 text-xs block">{p.age} años</span></td>
-                                      <td className="p-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs font-bold">E{p.stratum || '?'}</span></td>
-                                      <td className="p-4 text-gray-500">{p.diagnosis}</td>
-                                      <td className="p-4">{assigned ? <span className="text-green-700 bg-green-50 px-2 py-1 rounded text-xs font-bold">👤 {assigned.fullName}</span> : <span className="text-gray-400 italic text-xs">Sin asignar</span>}</td>
-                                      <td className="p-4"><span className={`w-2 h-2 rounded-full inline-block mr-2 ${assigned ? 'bg-green-500' : 'bg-red-500'}`}></span>{assigned ? 'Cubierto' : 'Pendiente'}</td>
-                                      <td className="p-4 text-center">
-                                          {/* NUEVO: Botón para ver el perfil completo del paciente */}
-                                          <button onClick={() => openPatientDetail(p)} className="bg-gray-100 text-gray-700 px-3 py-1 rounded text-xs font-bold hover:bg-gray-200 transition">
-                                              <MdRemoveRedEye className="text-lg"/> Ver Perfil
-                                          </button>
-                                      </td>
-                                  </tr>
-                              );
-                          })}
-                      </tbody>
-                  </table>
-                  {patients.length === 0 && <div className="p-8 text-center text-gray-400">No hay pacientes registrados.</div>}
-              </div>
-           </div>
-        )}
-                        {/* SECCIÓN 5: PROFESIONALES */}
-{activeTab === 'PROFESIONALES' && (
-  <div className="animate-fadeIn">
-      <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">Gestión Médica</h2>
-          <button onClick={()=>setShowProForm(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-emerald-700">+ Nuevo Profesional</button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {professionals.length === 0 && <p className="col-span-3 text-center text-gray-400">Sin registros.</p>}
-          {professionals.map(pro => (
-              <div key={pro.id} className="bg-white p-5 rounded-xl shadow-sm border border-emerald-100 hover:shadow-md transition flex flex-col h-full">
-                  <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-3">
-                          {/* AQUÍ ESTABA EL ERROR: Ya está cambiado a MdMedicalServices */}
-                          <div className="bg-emerald-100 p-3 rounded-full text-emerald-600"><MdMedicalServices className="text-2xl" /></div>
-                          <div>
-                              <h3 className="font-bold text-emerald-900 text-lg">{pro.fullName}</h3>
-                              <p className="text-xs text-gray-500">{pro.email}</p>
-                              <p className="text-xs text-gray-500">ID: {pro.identification}</p>
-                          </div>
+        {/* ---------------------------------------------------------------- */}
+        {/* Cuidadores activos                                               */}
+        {/* ---------------------------------------------------------------- */}
+        {activeTab === 'ACTIVOS' && (
+          <div>
+            <SectionTitle
+              title="Red de cuidadores"
+              description="Cuidadores aprobados y su paciente a cargo."
+            />
+            {loading ? <CardGridSkeleton count={6} /> : activeCaregivers.length === 0 ? (
+              <EmptyState
+                icon={<MdGroups />}
+                title={term ? 'Ningún cuidador coincide con la búsqueda' : 'Todavía no hay cuidadores activos'}
+                description={term
+                  ? 'Prueba con otro nombre o número de cédula.'
+                  : 'Los aspirantes aprobados en Validación aparecerán aquí.'}
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 stagger">
+                {activeCaregivers.map(caregiver => {
+                  const assignedPatient = patients.find(p => String(p.caregiverId) === String(caregiver.id));
+                  return (
+                    <Card key={caregiver.id} className="p-5 flex flex-col">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="text-base font-semibold text-ink-900 truncate">{caregiver.fullName}</h3>
+                          <p className="text-xs text-ink-500 mt-1">
+                            C.C. {caregiver.identification || 'sin registrar'}
+                          </p>
+                        </div>
+                        <Badge tone="ok">Activo</Badge>
                       </div>
-                  </div>
-                  <div className="mt-auto flex flex-col gap-2">
-                      <button onClick={() => handleViewVisits(pro)} className="w-full flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 py-2 rounded font-bold hover:bg-emerald-100 border border-emerald-200 transition shadow-sm">
-                          <MdAssignment className="text-lg"/> Perfil y Visitas a Detalle
-                      </button>
-                  </div>
+
+                      <dl className="mt-4 flex items-baseline justify-between gap-3 rounded-md bg-ink-50 border border-ink-200 px-3.5 py-2.5">
+                        <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">Código</dt>
+                        <dd className="font-mono text-sm font-semibold text-ink-900">
+                          {caregiver.accessCode || <SinRegistrar />}
+                        </dd>
+                      </dl>
+
+                      <div className="mt-3 flex-1 rounded-md border border-ink-200 px-3.5 py-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
+                          Paciente asignado
+                        </p>
+                        {assignedPatient ? (
+                          <p className="text-sm font-medium text-ink-900 mt-1.5">{assignedPatient.fullName}</p>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={<MdAdd />}
+                            className="mt-2 w-full"
+                            onClick={() => setCaregiverToAssign(caregiver)}
+                          >
+                            Asignar paciente
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2.5 mt-4">
+                        <Button variant="secondary" className="flex-1" icon={<MdRemoveRedEye />} onClick={() => setSelectedCandidate(caregiver)}>
+                          Perfil
+                        </Button>
+                        <Button variant="primary" className="flex-1" icon={<MdEventNote />} onClick={() => handleViewLogs(caregiver)}>
+                          Bitácoras
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
-          ))}
-      </div>
-  </div>
-)}
-      {/* -------------------------------------------------------- */}
-        {/* SECCIÓN 6: FINANCIERO                                    */}
-        {/* -------------------------------------------------------- */}
-        {activeTab === 'FINANCIERO' && (
-            <div className="animate-fadeIn">
-                {/* Selector: tres cajones, uno por tipo de reporte */}
-                {!reporteAbierto && (
-                    <>
-                        <div className="mb-6">
-                            <h2 className="text-2xl font-bold text-gray-800">Reportes</h2>
-                            <p className="text-sm text-gray-500">Elige el reporte que necesitas generar.</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {REPORTES.map(r => (
-                                <button
-                                    key={r.id}
-                                    onClick={() => setReporteAbierto(r.id)}
-                                    className="bg-white border-2 border-dashed border-blue-300 rounded-xl p-6 flex flex-col items-center justify-center text-blue-700 cursor-pointer hover:bg-blue-50 hover:border-blue-400 hover:shadow-md transition-all min-h-[280px] group"
-                                >
-                                    <img
-                                        src={r.imagen}
-                                        alt={r.titulo}
-                                        className="w-56 h-56 mb-3 object-contain group-hover:scale-105 transition-transform drop-shadow-sm"
-                                    />
-                                    <h3 className="font-bold text-lg text-gray-800">{r.titulo}</h3>
-                                    <p className="text-xs text-gray-500 mt-1 text-center px-2">{r.descripcion}</p>
-                                </button>
-                            ))}
-                        </div>
-                    </>
-                )}
-
-                {/* Módulo abierto, con vuelta a los cajones */}
-                {reporteAbierto && (
-                    <>
-                        <button
-                            onClick={() => setReporteAbierto(null)}
-                            className="text-gray-500 hover:text-blue-600 flex items-center gap-1 font-medium mb-4 transition"
-                        >
-                            ← Volver a Reportes
-                        </button>
-
-                        {reporteAbierto === 'FINANZAS' && <ReportesFinancieros user={user} />}
-                        {reporteAbierto === 'FURAG' && <EvidenciaFurag user={user} />}
-                        {reporteAbierto === 'ADRES' && <CaracterizacionPrograma />}
-                    </>
-                )}
-            </div>
+            )}
+          </div>
         )}
 
+        {/* ---------------------------------------------------------------- */}
+        {/* Pacientes                                                        */}
+        {/* ---------------------------------------------------------------- */}
+        {activeTab === 'PACIENTES' && (
+          <div>
+            <SectionTitle
+              title="Listado maestro de pacientes"
+              description={`${patients.length} personas registradas en el programa.`}
+              action={
+                <Button variant="primary" icon={<MdAdd />} onClick={() => setShowPatientForm(true)}>
+                  Nuevo paciente
+                </Button>
+              }
+            />
+            {loading ? <TableSkeleton rows={8} cols={6} /> : filteredPatients.length === 0 ? (
+              <EmptyState
+                icon={<MdLocalHospital />}
+                title={term ? 'Ningún paciente coincide con la búsqueda' : 'Todavía no hay pacientes registrados'}
+                description={term
+                  ? 'Prueba con otro nombre, cédula o diagnóstico.'
+                  : 'Registra el primer paciente para empezar a medir la cobertura del programa.'}
+                action={!term && (
+                  <Button variant="primary" icon={<MdAdd />} onClick={() => setShowPatientForm(true)}>
+                    Registrar paciente
+                  </Button>
+                )}
+              />
+            ) : (
+              <Table minWidth="min-w-[760px]">
+                <thead>
+                  <tr>
+                    <Th>Paciente</Th>
+                    <Th>Estrato</Th>
+                    <Th>Diagnóstico</Th>
+                    <Th>Cuidador</Th>
+                    <Th>Estado</Th>
+                    <Th align="right">Acciones</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPatients.map(p => {
+                    const assigned = caregivers.find(c => String(c.id) === String(p.caregiverId));
+                    return (
+                      <Tr key={p.id}>
+                        <Td>
+                          {/* Sin nowrap, un nombre de tres palabras se parte
+                              en tres líneas dentro de la tabla en móvil. */}
+                          <p className="font-medium text-ink-900 whitespace-nowrap">{p.fullName}</p>
+                          <p className="text-xs text-ink-500 mt-0.5">
+                            {p.age ? `${p.age} años` : <SinRegistrar className="text-xs" />}
+                          </p>
+                        </Td>
+                        <Td>
+                          {p.stratum
+                            ? <Badge>Estrato {p.stratum}</Badge>
+                            : <SinRegistrar className="text-xs" />}
+                        </Td>
+                        <Td className="text-ink-700 max-w-[220px] truncate">{p.diagnosis || <SinRegistrar />}</Td>
+                        <Td>
+                          {assigned
+                            ? <span className="text-ink-900">{assigned.fullName}</span>
+                            : <SinRegistrar className="text-xs" />}
+                        </Td>
+                        <Td>
+                          <StatusDot tone={assigned ? 'ok' : 'warn'}>
+                            {assigned ? 'Cubierto' : 'Sin cuidador'}
+                          </StatusDot>
+                        </Td>
+                        <Td align="right">
+                          <Button variant="secondary" size="sm" icon={<MdRemoveRedEye />} onClick={() => setSelectedPatient(p)}>
+                            Ver perfil
+                          </Button>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            )}
+          </div>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Profesionales                                                    */}
+        {/* ---------------------------------------------------------------- */}
+        {activeTab === 'PROFESIONALES' && (
+          <div>
+            <SectionTitle
+              title="Personal médico"
+              description="Profesionales habilitados para registrar visitas domiciliarias."
+              action={
+                <Button variant="primary" icon={<MdAdd />} onClick={() => setShowProForm(true)}>
+                  Nuevo profesional
+                </Button>
+              }
+            />
+            {loading ? <CardGridSkeleton count={3} /> : filteredProfessionals.length === 0 ? (
+              <EmptyState
+                icon={<MdMedicalServices />}
+                title={term ? 'Ningún profesional coincide con la búsqueda' : 'Todavía no hay profesionales registrados'}
+                description={term
+                  ? 'Prueba con otro nombre, cédula o cargo.'
+                  : 'Registra al personal médico que hará las visitas domiciliarias.'}
+                action={!term && (
+                  <Button variant="primary" icon={<MdAdd />} onClick={() => setShowProForm(true)}>
+                    Registrar profesional
+                  </Button>
+                )}
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 stagger">
+                {filteredProfessionals.map(pro => (
+                  <Card key={pro.id} className="p-5 flex flex-col">
+                    <div className="flex items-start gap-3.5">
+                      <span aria-hidden="true" className="shrink-0 h-11 w-11 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center text-xl">
+                        <MdMedicalServices />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold text-ink-900 truncate">{pro.fullName}</h3>
+                        <p className="text-sm text-ink-500 mt-0.5">{pro.position || <SinRegistrar />}</p>
+                        <p className="text-xs text-ink-500 mt-1 truncate">{pro.email}</p>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="secondary"
+                      className="mt-4 w-full"
+                      icon={<MdAssignment />}
+                      onClick={() => handleViewVisits(pro)}
+                    >
+                      Perfil y visitas
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Reportes                                                         */}
+        {/* ---------------------------------------------------------------- */}
+        {activeTab === 'FINANCIERO' && (
+          <div>
+            {!reporteAbierto ? (
+              <>
+                <SectionTitle
+                  title="Reportes institucionales"
+                  description="Elige el reporte que necesitas generar."
+                />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 stagger">
+                  {REPORTES.map(r => (
+                    <Card
+                      key={r.id}
+                      as="button"
+                      interactive
+                      onClick={() => setReporteAbierto(r.id)}
+                      className="p-6 flex flex-col items-center text-center"
+                    >
+                      <img
+                        src={r.imagen}
+                        alt=""
+                        loading="lazy"
+                        className="w-40 h-40 object-contain"
+                      />
+                      <h3 className="mt-4 text-base font-semibold text-ink-900">{r.titulo}</h3>
+                      <p className="mt-1.5 text-sm text-ink-500">{r.descripcion}</p>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  icon={<MdArrowBack />}
+                  className="mb-4 -ml-2"
+                  onClick={() => setReporteAbierto(null)}
+                >
+                  Volver a reportes
+                </Button>
+                {reporteAbierto === 'FINANZAS' && <ReportesFinancieros user={user} />}
+                {reporteAbierto === 'FURAG'    && <EvidenciaFurag user={user} />}
+                {reporteAbierto === 'ADRES'    && <CaracterizacionPrograma />}
+              </>
+            )}
+          </div>
+        )}
       </main>
 
-      {/* ================================================================================== */}
-      {/* MODALES                                                                            */}
-      {/* ================================================================================== */}
+      {/* ================================================================== */}
+      {/* Modales                                                            */}
+      {/* ================================================================== */}
 
-      {/* MODAL CUIDADOR */}
-      {selectedCaregiver && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-                <div className="bg-blue-900 p-6 text-white sticky top-0 flex justify-between">
-                    <div><h2 className="text-2xl font-bold">{selectedCaregiver.fullName}</h2><p className="text-blue-200 text-sm">ID: {selectedCaregiver.identification}</p></div>
-                    <button onClick={()=>setSelectedCaregiver(null)} className="text-white text-2xl hover:text-red-300">✕</button>
-                </div>
-                <div className="p-6 space-y-6">
-                    <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-lg border border-gray-100">
-                        <div><p className="font-bold text-gray-500 text-xs">Teléfono</p><p>{selectedCaregiver.phone}</p></div>
-                        <div><p className="font-bold text-gray-500 text-xs">Email</p><p>{selectedCaregiver.email}</p></div>
-                        <div><p className="font-bold text-gray-500 text-xs">Experiencia</p><p>{selectedCaregiver.experienceYears} años</p></div>
-                        <div><p className="font-bold text-gray-500 text-xs">Dirección</p><p>{selectedCaregiver.address}</p></div>
-                    </div>
-                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                        <h3 className="font-bold text-yellow-800 mb-2">📂 Documentos</h3>
-                        {selectedCaregiver.senaFile ? selectedCaregiver.senaFile.split(',').map((f,i)=> (
-                            <a key={i} href={fileUrl(`/uploads/${f.trim()}`)} target="_blank" rel="noreferrer" className="block text-blue-600 underline text-sm mb-1">Documento {i+1}</a>
-                        )) : <p className="text-gray-400 text-sm">Sin documentos.</p>}
-                    </div>
-                    {selectedCaregiver.status === 'PENDIENTE' && (
-                        <div className="pt-4 border-t flex justify-end gap-3">
-                            <button onClick={()=>handleStatusChange(selectedCaregiver.id, 'RECHAZADO')} className="px-5 py-2 border border-red-200 text-red-600 font-bold rounded hover:bg-red-50">Rechazar</button>
-                            <button onClick={()=>handleStatusChange(selectedCaregiver.id, 'PRESELECCIONADO')} className="px-5 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700">Preseleccionar</button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-      )}
-
-     {/* MODAL BITÁCORAS (CORREGIDO PARA TU ESTRUCTURA) */}
-      {showLogsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl max-w-4xl w-full h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-                
-                {/* ENCABEZADO DEL MODAL */}
-                <div className="bg-slate-900 text-white p-5 flex justify-between items-center shadow-md z-10">
-                    <div>
-                        <h3 className="font-bold text-xl">Bitácoras del Paciente</h3>
-                        <p className="text-slate-400 text-sm">Historial de cuidados y observaciones</p>
-                    </div>
-                    <button 
-                        onClick={() => setShowLogsModal(false)} 
-                        className="bg-slate-800 hover:bg-red-500 hover:text-white text-slate-300 w-10 h-10 rounded-full flex items-center justify-center transition-all text-xl font-bold"
-                    >
-                        ✕
-                    </button>
-                </div>
-
-                {/* CUERPO DEL MODAL */}
-                <div className="p-6 overflow-y-auto bg-slate-100 flex-1 space-y-6">
-                    
-                    {selectedCaregiverLogs.length === 0 && (
-                        <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                            <span className="text-4xl mb-2">📂</span>
-                            <p className="text-lg font-medium">No hay registros disponibles.</p>
-                        </div>
-                    )}
-
-                    {selectedCaregiverLogs.map((log, idx) => {
-                        if (log.recordType === 'PROFESIONAL') {
-                            let f = {}; try { f = JSON.parse(log.formData); } catch { f = {}; }
-                            return (
-                                <div key={idx} className="bg-emerald-50 rounded-xl shadow-sm border border-emerald-200 overflow-hidden mb-4">
-                                    <div className="bg-emerald-100 px-5 py-3 border-b border-emerald-200 flex justify-between items-center">
-                                        <div className="flex items-center gap-3">
-                                            <div className="bg-emerald-600 text-white p-2 rounded-lg">🩺</div>
-                                            <div>
-                                                <h4 className="font-bold text-emerald-900 text-base">{new Date(log.date).toLocaleDateString()}</h4>
-                                                <p className="text-xs text-emerald-700 font-medium">Visita Profesional | Hora: {log.time}</p>
-                                            </div>
-                                        </div>
-                                        <span className="px-4 py-1.5 rounded-full text-xs font-bold uppercase bg-emerald-200 text-emerald-800">
-                                            Atención Médica
-                                        </span>
-                                    </div>
-                                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                        <div><p className="font-bold text-emerald-800">Motivo</p><p>{f.reason || 'No especificado'}</p></div>
-                                        <div><p className="font-bold text-emerald-800">Diagnóstico</p><p className="text-red-600 font-medium">{f.diagnosisMain || 'No especificado'}</p></div>
-                                        <div className="col-span-2"><p className="font-bold text-emerald-800">Conducta a seguir</p><p>{f.conduct || 'No especificada'}</p></div>
-                                    </div>
-                                </div>
-                            );
-                        }
-                        // 1. INTENTAR LEER LA DATA
-                        let data = {};
-                        try {
-                            data = JSON.parse(log.content);
-                        } catch (e) {
-                            data = { observations: log.content }; 
-                        }
-
-                     
-                        const obs = data.observations || data.notes || "Sin observaciones detalladas.";
-                        const alerta = data.alerts && Array.isArray(data.alerts) && data.alerts.length > 0;
-
-                        return (
-                            <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                                
-                                {/* A. ENCABEZADO */}
-                                <div className="bg-slate-50 px-5 py-3 border-b border-slate-100 flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <div className="bg-blue-100 text-blue-700 p-2 rounded-lg">📅</div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-800 text-base">
-                                                {new Date(log.date).toLocaleDateString()}
-                                            </h4>
-                                            <p className="text-xs text-slate-500 font-medium">
-                                                Hora: {new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Etiqueta de Estado General */}
-                                    <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                                        alerta || data.generalState === 'Peor'
-                                        ? 'bg-red-50 text-red-600 border-red-200 animate-pulse' 
-                                        : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                    }`}>
-                                        {data.generalState || 'Estable'}
-                                    </span>
-                                </div>
-
-                                {/* B. GRILLA DE INFORMACIÓN */}
-                                <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                                    {/* 1. ESTADO GENERAL Y ALERTAS */}
-                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                        <h5 className="font-bold text-slate-700 mb-3 text-sm uppercase">👤 Estado General</h5>
-                                        <div className="space-y-2 text-sm">
-                                            <div className="flex justify-between border-b border-slate-200 pb-1">
-                                                <span className="text-slate-500">Nivel de Conciencia:</span> 
-                                                <span className="font-medium text-slate-800">{data.alertLevel || 'No reportado'}</span>
-                                            </div>
-                                            <div className="flex justify-between border-b border-slate-200 pb-1">
-                                                <span className="text-slate-500">Movilidad:</span> 
-                                                <span className="font-medium text-slate-800">{data.mobility || 'No reportado'}</span>
-                                            </div>
-                                            {/* Mostrar Alertas si existen */}
-                                            {alerta && (
-                                                <div className="mt-2 bg-red-100 p-2 rounded text-red-700 text-xs">
-                                                    <strong>⚠️ Alertas:</strong> {data.alerts.join(', ')} <br/>
-                                                    <span className="italic">{data.alertDesc}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* 2. CUIDADOS BÁSICOS (Higiene, Piel, Ropa) */}
-                                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                                        <h5 className="font-bold text-blue-800 mb-3 text-sm uppercase">🚿 Higiene y Confort</h5>
-                                        <div className="flex flex-wrap gap-2 text-xs">
-                                            <span className={`px-2 py-1 rounded border ${data.hygiene === 'Sí' ? 'bg-white border-blue-200 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {data.hygiene === 'Sí' ? '✅ Higiene Realizada' : '⬜ Sin Higiene'}
-                                            </span>
-                                            <span className={`px-2 py-1 rounded border ${data.clothes === 'Sí' ? 'bg-white border-blue-200 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {data.clothes === 'Sí' ? '✅ Cambio Ropa' : '⬜ Ropa'}
-                                            </span>
-                                            <span className={`px-2 py-1 rounded border ${data.skin === 'Sí' ? 'bg-white border-blue-200 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {data.skin === 'Sí' ? '✅ Piel Hidratada' : '⬜ Piel'}
-                                            </span>
-                                            <span className={`px-2 py-1 rounded border ${data.position === 'Sí' ? 'bg-white border-blue-200 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {data.position === 'Sí' ? '✅ Cambios Posición' : '⬜ Posición'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* 3. ALIMENTACIÓN Y MEDICAMENTOS */}
-                                    <div className="col-span-1 md:col-span-2 bg-orange-50 p-4 rounded-xl border border-orange-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        
-                                        {/* Columna Alimentación */}
-                                        <div>
-                                            <h5 className="font-bold text-orange-800 mb-2 text-sm uppercase">🍽️ Alimentación</h5>
-                                            <div className="text-sm space-y-1">
-                                                <p><span className="font-bold text-orange-900">Ingesta:</span> {data.feeding || '-'}</p>
-                                                <p><span className="font-bold text-orange-900">Hidratación:</span> {data.hydration || '-'}</p>
-                                                {data.foodObs && <p className="text-xs text-orange-800 italic bg-white/50 p-1 rounded">"{data.foodObs}"</p>}
-                                            </div>
-                                        </div>
-
-                                        {/* Columna Medicamentos */}
-                                        <div>
-                                            <h5 className="font-bold text-orange-800 mb-2 text-sm uppercase">💊 Medicamentos</h5>
-                                            <div className="text-sm space-y-1">
-                                                <p><span className="font-bold text-orange-900">Suministrados:</span> {data.medsGiven || '-'}</p>
-                                                {data.medsReason && <p className="text-xs text-red-600 bg-red-50 p-1 rounded border border-red-100">⚠️ No dados por: {data.medsReason}</p>}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* 4. OBSERVACIONES Y FIRMA */}
-                                    <div className="col-span-1 md:col-span-2 bg-yellow-50 p-4 rounded-xl border border-yellow-100">
-                                        <h5 className="font-bold text-slate-700 mb-1 text-sm uppercase">📝 Observaciones Generales</h5>
-                                        
-                                        {/* Observaciones */}
-                                        <p className="text-slate-600 italic bg-white p-3 rounded border border-slate-200 text-sm leading-relaxed mb-4">
-                                            "{obs}"
-                                        </p>
-
-                                        {/* Firma */}
-                                        <div className="flex justify-end items-center gap-2 border-t border-yellow-200 pt-2">
-                                            <span className="text-xs text-slate-400 uppercase tracking-wider">Firma:</span>
-                                            {data.signature ? (
-                                                <span className="font-handwriting text-lg text-blue-900 font-bold px-2 border-b border-blue-900">
-                                                    {data.signature}
-                                                </span>
-                                            ) : <span className="text-xs text-gray-400">Sin firma</span>}
-                                        </div>
-                                    </div>
-
-                                </div>
-                            </div>
-                        );
-                    })}
-
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* MODAL ASIGNAR */}
-      {showAssignModal && caregiverToAssign && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-             <div className="bg-white p-6 rounded shadow-lg max-w-sm w-full animate-fadeIn">
-                <h3 className="font-bold mb-4 text-lg">Asignar a {caregiverToAssign.fullName}</h3>
-                <div className="max-h-60 overflow-y-auto border rounded border-gray-200">
-                    {patients.filter(p=>!p.caregiverId).length === 0 && <p className="text-gray-400 text-sm p-4 text-center">No hay pacientes disponibles.</p>}
-                    {patients.filter(p=>!p.caregiverId).map(p=>(
-                        <button key={p.id} onClick={()=>handleAssignPatient(p.id)} className="block w-full text-left p-3 hover:bg-blue-50 border-b last:border-0 transition">{p.fullName}</button>
-                    ))}
-                </div>
-                <button onClick={()=>setShowAssignModal(false)} className="mt-4 text-red-500 w-full text-center hover:bg-red-50 py-2 rounded">Cancelar</button>
-             </div>
-          </div>
-      )}
-      {/* MODAL CREAR PACIENTE MEJORADO (Con Selects Geográficos + Campo Email) */}
-      {showPatientForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-              <div className="bg-white p-6 rounded-lg w-full max-w-lg shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
-                  <h3 className="font-bold mb-4 text-xl border-b pb-2">Nuevo Paciente - Támesis</h3>
-                  <form onSubmit={handleCreatePatient} className="space-y-3">
-                      <input 
-                        placeholder="Nombre Completo" 
-                        className="border w-full p-2 rounded" 
-                        value={newPatientData.fullName || ''} 
-                        onChange={e=>setNewPatientData({...newPatientData, fullName:e.target.value})} 
-                        required
-                      />
-
-                      {/* Cédula: es la llave con la que el sistema auto-asigna cuidadores */}
-                      <div>
-                        <input
-                          placeholder="Cédula del Paciente *"
-                          className="border w-full p-2 rounded bg-amber-50/40"
-                          value={newPatientData.identification || ''}
-                          onChange={e=>setNewPatientData({...newPatientData, identification:e.target.value})}
-                          required
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Con este documento el sistema asigna automáticamente al cuidador que lo registre en su postulación.
-                        </p>
-                      </div>
-
-                      {/* 👇 CAMPO NUEVO Y OBLIGATORIO PARA ENVIAR CÓDIGO POR CORREO 👇 */}
-                      <input
-                        type="email"
-                        placeholder="Correo Electrónico (para enviarle su código de acceso) *"
-                        className="border w-full p-2 rounded bg-blue-50/40"
-                        value={newPatientData.email || ''}
-                        onChange={e=>setNewPatientData({...newPatientData, email:e.target.value})}
-                        required
-                      />
-                      
-                      <div className="flex gap-2">
-                          <input 
-                            placeholder="Edad" 
-                            type="number" 
-                            className="border w-full p-2 rounded" 
-                            value={newPatientData.age || ''} 
-                            onChange={e=>setNewPatientData({...newPatientData, age:e.target.value})} 
-                            required 
-                          />
-                          <select 
-                            className="border w-full p-2 rounded bg-white" 
-                            value={newPatientData.stratum || ''} 
-                            onChange={e=>setNewPatientData({...newPatientData, stratum:e.target.value})} 
-                            required
-                          >
-                             <option value="">Estrato...</option>
-                             <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-                             <option value="4">4</option><option value="5">5</option><option value="6">6</option>
-                          </select>
-                      </div>
-                      
-                      <input 
-                        placeholder="Teléfono" 
-                        className="border w-full p-2 rounded" 
-                        value={newPatientData.contactPhone || ''} 
-                        onChange={e=>setNewPatientData({...newPatientData, contactPhone:e.target.value})} 
-                      />
-                      
-                      <select 
-                        className="border w-full p-2 rounded bg-white" 
-                        value={newPatientData.diagnosis || ''} 
-                        onChange={e=>setNewPatientData({...newPatientData, diagnosis:e.target.value})} 
-                        required
-                      >
-                          <option value="">Seleccione Diagnóstico...</option>
-                          {COMMON_DISEASES.map((d, i) => <option key={i} value={d}>{d}</option>)}
-                      </select>
-
-                      {/* --- SECCIÓN GEOGRÁFICA --- */}
-                      <div className="bg-gray-50 p-3 rounded border border-gray-200 space-y-2">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase">Ubicación en Támesis</h4>
-                          <select 
-                            className="border w-full p-2 rounded bg-white" 
-                            value={newPatientData.zoneCategory || ''} 
-                            onChange={e=>setNewPatientData({...newPatientData, zoneCategory:e.target.value, zoneDetail: ''})} 
-                            required
-                          >
-                              <option value="">Seleccione Zona Principal...</option>
-                              {Object.keys(TAMESIS_ZONES).map(zone => (
-                                  <option key={zone} value={zone}>{zone}</option>
-                              ))}
-                          </select>
-
-                          <select 
-                            className="border w-full p-2 rounded bg-white" 
-                            value={newPatientData.zoneDetail || ''} 
-                            onChange={e=>setNewPatientData({...newPatientData, zoneDetail:e.target.value})} 
-                            required 
-                            disabled={!newPatientData.zoneCategory}
-                          >
-                              <option value="">Seleccione Corregimiento/Vereda/Barrio...</option>
-                              {newPatientData.zoneCategory && TAMESIS_ZONES[newPatientData.zoneCategory].map(detail => (
-                                  <option key={detail} value={detail}>{detail}</option>
-                              ))}
-                          </select>
-                          
-                          <input 
-                            placeholder="Dirección exacta o puntos de referencia" 
-                            className="border w-full p-2 rounded" 
-                            value={newPatientData.address || ''} 
-                            onChange={e=>setNewPatientData({...newPatientData, address:e.target.value})} 
-                            required
-                          />
-                      </div>
-
-                      <textarea 
-                        placeholder="Instrucciones de cuidado específicas..." 
-                        className="border w-full p-2 rounded focus:ring-2 outline-none" 
-                        value={newPatientData.careInstructions || ''} 
-                        onChange={e=>setNewPatientData({...newPatientData, careInstructions:e.target.value})} 
-                        rows="3" 
-                      />
-                      
-                      <div>
-                          <label className="text-xs font-bold text-gray-500 uppercase">Historia Clínica Previa </label>
-                          <input 
-                              type="file" 
-                              className="w-full border p-2 rounded text-sm" 
-                              onChange={(e) => setNewPatientData({...newPatientData, fileHistory: e.target.files[0]})} 
-                          />
-                      </div>
-
-                      <div className="flex gap-2 pt-2">
-                          <button type="button" onClick={()=>setShowPatientForm(false)} className="flex-1 bg-gray-200 text-gray-700 font-bold p-2 rounded">Cancelar</button>
-                          <button type="submit" className="flex-1 bg-green-600 text-white font-bold p-2 rounded">Guardar</button>
-                      </div>
-                  </form>
-              </div>
-          </div>
-      )}
-
-      {/* MODAL CREAR PROFESIONAL */}
-{showProForm && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-        <div className="bg-white rounded-xl w-full max-w-md shadow-2xl p-6 animate-fadeIn overflow-y-auto max-h-[90vh]">
-            <h2 className="text-xl font-bold mb-4 border-b pb-2">Registrar Profesional</h2>
-            <form onSubmit={handleCreateProfessional} className="space-y-4">
-                <input type="text" placeholder="Nombre Completo" className="w-full border p-2 rounded focus:ring-2 outline-none" value={newProData.fullName} onChange={e=>setNewProData({...newProData, fullName: e.target.value})} required />
-                
-                <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Cédula" className="w-full border p-2 rounded focus:ring-2 outline-none" value={newProData.identification} onChange={e=>setNewProData({...newProData, identification: e.target.value})} required />
-                    <input type="text" placeholder="Teléfono" className="w-full border p-2 rounded focus:ring-2 outline-none" value={newProData.phone} onChange={e=>setNewProData({...newProData, phone: e.target.value})} required />
-                </div>
-                
-                <input type="email" placeholder="Correo Electrónico" className="w-full border p-2 rounded focus:ring-2 outline-none" value={newProData.email} onChange={e=>setNewProData({...newProData, email: e.target.value})} required />
-                
-                {/* NUEVO: Campo de Cargo */}
-                <input type="text" placeholder="Cargo (Ej: Médico, Enfermero)" className="w-full border p-2 rounded focus:ring-2 outline-none" value={newProData.position} onChange={e=>setNewProData({...newProData, position: e.target.value})} required />
-                
-                {/* NUEVO: Subida de Hoja de Vida */}
-                <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Soporte Hoja de Vida</label>
-                    <input type="file" className="w-full border p-2 rounded text-sm" onChange={e=>setNewProData({...newProData, resumeFile: e.target.files[0]})} />
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                    <button type="button" onClick={()=>setShowProForm(false)} className="w-full bg-gray-200 text-gray-700 py-2 rounded font-bold hover:bg-gray-300">Cancelar</button>
-                    <button type="submit" className="w-full bg-emerald-600 text-white py-2 rounded font-bold hover:bg-emerald-700">Registrar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-)}
-
-      {/* RENDERIZAR EL NUEVO MODAL DE DETALLE */}
-      <ApplicantDetailModal 
-         isOpen={showDetailModal}
-         onClose={() => setShowDetailModal(false)}
-         candidate={selectedCandidate}
-         onAction={handleDetailAction}
+      <ApplicantDetailModal
+        open={Boolean(selectedCandidate)}
+        candidate={selectedCandidate}
+        onClose={() => setSelectedCandidate(null)}
+        onAction={handleStatusChange}
       />
-  {/* MODAL: PERFIL Y VISITAS DEL PROFESIONAL MEDICO */}
-      {showVisitsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fadeIn">
-              <div className="bg-white rounded-xl max-w-5xl w-full h-[90vh] flex flex-col shadow-2xl">
-                  <div className="bg-emerald-800 text-white p-5 flex justify-between items-center shrink-0">
-                      <div>
-                          {/* AQUÍ ESTÁ LA CORRECCIÓN: MdMedicalServices en lugar del anterior */}
-                          <h3 className="font-bold text-xl flex items-center gap-2"><MdMedicalServices /> Perfil Profesional y Visitas</h3>
-                          <p className="text-sm text-emerald-200">Dr(a). {selectedProName}</p>
-                      </div>
-                      <button onClick={()=>setShowVisitsModal(false)} className="text-2xl hover:text-red-300"><MdClose /></button>
-                  </div>
-                  
-                  <div className="p-6 overflow-y-auto bg-gray-50 flex-1 space-y-6">
-                      
-  {/* Datos del Médico Completos */}
-<div className="bg-white p-5 rounded-lg border border-emerald-100 shadow-sm grid grid-cols-1 md:grid-cols-5 gap-4">
-    <div className="md:col-span-5 border-b border-gray-100 pb-2 mb-2">
-        <h4 className="font-bold text-emerald-800 flex items-center gap-2"><MdPerson /> Perfil del Profesional</h4>
-    </div>
-    <div>
-        <p className="text-xs text-gray-500 font-bold uppercase">Nombre</p>
-        <p className="text-sm font-medium">{selectedProName}</p>
-    </div>
-    <div>
-        <p className="text-xs text-gray-500 font-bold uppercase">Cargo</p>
-        {/* AQUÍ ESTÁ EL ARREGLO: selectedPro?.position */}
-        <p className="text-sm font-medium text-emerald-700 bg-emerald-50 inline-block px-2 py-0.5 rounded">
-            {selectedPro?.position || 'No registrado'}
-        </p>
-    </div>
-    <div>
-        <p className="text-xs text-gray-500 font-bold uppercase">Contacto</p>
-        {/* AQUÍ ESTÁ EL ARREGLO: selectedPro?.phone */}
-        <p className="text-sm font-medium">
-            {selectedPro?.phone || 'N/A'}
-        </p>
-    </div>
-    {/* 👇 AQUÍ ESTÁ LA NUEVA CALIFICACIÓN DINÁMICA 👇 */}
-    {(() => {
-        const evaluatedVisits = selectedProVisits.filter(v => v.rating && Number(v.rating) > 0);
-        const count = evaluatedVisits.length;
-        const sum = evaluatedVisits.reduce((acc, v) => acc + Number(v.rating), 0);
-        const calculatedAvg = count > 0 ? (sum / count).toFixed(1) : (selectedPro?.averageRating || 0);
-        const totalCount = count > 0 ? count : (selectedPro?.totalEvaluations || 0);
 
-        return (
-            <div>
-                <p className="text-xs text-gray-500 font-bold uppercase">Calificación</p>
-                <div className="flex items-center gap-1 mt-1">
-                    <MdStar className="text-amber-500 text-lg" />
-                    <span className="text-sm font-bold text-gray-800">
-                        {Number(calculatedAvg) > 0 ? calculatedAvg : 'Sin evaluar'}
-                    </span>
-                    <span className="text-xs text-gray-400 font-medium">
-                        ({totalCount})
-                    </span>
-                </div>
-            </div>
-        );
-    })()}
-    {/* 👆 FIN DE LA CALIFICACIÓN DINÁMICA 👆 */}
-    {/* AQUÍ ESTÁ LA NUEVA ACTUALIZACIÓN: Calificación del profesional */}
-    <div>
-        <p className="text-xs text-gray-500 font-bold uppercase">Calificación</p>
-        <div className="flex items-center gap-1 mt-1">
-            <MdStar className="text-amber-500 text-lg" />
-            <span className="text-sm font-bold text-gray-800">
-                {selectedPro?.averageRating > 0 ? selectedPro.averageRating : 'Sin evaluar'}
-            </span>
-            <span className="text-xs text-gray-400 font-medium">
-                ({selectedPro?.totalEvaluations || 0})
-            </span>
-        </div>
-    </div>
-    <div>
-        <p className="text-xs text-gray-500 font-bold uppercase">Documentos</p>
-        <div className="flex flex-col gap-1 mt-1">
-            {/* AQUÍ ESTÁ EL ARREGLO: selectedPro?.resumeFile */}
-            {selectedPro?.resumeFile ? (
-                <a href={fileUrl(`/uploads/${selectedPro.resumeFile}`)} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-bold hover:underline">📄 Ver Hoja de Vida</a>
-            ) : <span className="text-xs text-gray-400">Sin Hoja de Vida</span>}
-        </div>
-    </div>
-</div>
-                      <div className="space-y-4">
-                        {selectedProVisits.map((v, i) => {
-                            let f = {}; try { f = JSON.parse(v.formData); } catch { f = {}; }
-                            return (
-                              <div key={i} className="bg-white p-5 rounded-lg shadow-sm border border-emerald-100 hover:shadow-md transition">
-                                  <div className="flex justify-between items-center border-b pb-3 mb-3">
-                                      <span className="font-bold text-gray-800 flex items-center gap-2"><MdCalendarToday className="text-emerald-600"/> {new Date(v.date).toLocaleDateString()} - {v.time}</span>
-                                      <span className="bg-emerald-100 text-emerald-800 text-xs px-3 py-1 rounded-full font-bold">Atención Domiciliaria</span>
-                                  </div>
-                                  
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
-                                      <div className="bg-gray-50 p-4 rounded border border-gray-100">
-                                          <h5 className="font-bold text-xs text-gray-500 uppercase flex items-center gap-1 mb-2"><MdPerson /> Paciente</h5>
-                                          <p className="text-sm font-medium text-gray-800">{v.patientName || 'No registrado'}</p>
-                                      </div>
-                                      <div className="md:col-span-2 bg-gray-50 p-4 rounded border border-gray-100">
-                                          <h5 className="font-bold text-xs text-gray-500 uppercase flex items-center gap-1 mb-2"><MdHealthAndSafety /> Cuadro Clínico</h5>
-                                          <div className="grid grid-cols-2 gap-4 text-sm">
-                                              <div><span className="text-gray-500 block">Motivo de consulta:</span> <span className="font-medium">{f.reason || '-'}</span></div>
-                                              <div><span className="text-gray-500 block">Diagnóstico:</span> <span className="font-medium text-red-600">{f.diagnosisMain || '-'}</span></div>
-                                          </div>
-                                      </div>
-                                  </div>
+      <ComplianceModal
+        open={showComplianceDetail}
+        onClose={() => setShowComplianceDetail(false)}
+        detail={logDetail}
+      />
 
-                                  <div className="bg-blue-50 p-4 rounded border border-blue-100">
-                                      <h5 className="font-bold text-xs text-blue-800 uppercase flex items-center gap-1 mb-2"><MdEditNote /> Conducta / Plan a seguir</h5>
-                                      <p className="text-sm text-gray-700">{f.conduct || 'Sin observaciones registradas.'}</p>
-                                  </div>
-                                  {/* 👇 NUEVO BLOQUE: CALIFICACIÓN Y COMENTARIOS DEL CUIDADOR 👇 */}
-                                  {v.rating ? (
-                                      <div className="bg-amber-50 p-4 rounded border border-amber-200">
-                                          <h5 className="font-bold text-xs text-amber-900 uppercase flex items-center gap-1 mb-2">
-                                              <MdStar className="text-amber-500 text-lg" /> Evaluación del Cuidador
-                                          </h5>
-                                          <div className="flex items-center gap-1 mb-2">
-                                              {/* Pintar las 5 estrellas dinámicamente según la calificación */}
-                                              {[...Array(5)].map((_, index) => (
-                                                  <MdStar key={index} className={`text-xl ${index < v.rating ? 'text-amber-500' : 'text-amber-100'}`} />
-                                              ))}
-                                              <span className="text-sm font-black text-amber-800 ml-2">{v.rating}.0 / 5.0</span>
-                                          </div>
-                                          {v.evalComments && (
-                                              <div className="mt-2 bg-white p-3 rounded border border-amber-100 shadow-sm relative">
-                                                  <p className="text-sm text-gray-700 italic">"{v.evalComments}"</p>
-                                              </div>
-                                          )}
-                                      </div>
-                                  ) : (
-                                      <div className="bg-gray-50 p-3 rounded border border-gray-200 flex items-center gap-2 text-gray-500">
-                                          <MdStar className="text-gray-400 text-lg" />
-                                          <span className="text-xs font-medium">Esta visita aún no ha sido calificada por el cuidador.</span>
-                                      </div>
-                                  )}
-                                  {/* 👆 FIN DEL NUEVO BLOQUE 👆 */}
-                              </div>
-                            )
-                        })}
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-                    {/* ======================================================== */}
-{/* MODAL: PERFIL COMPLETO CUIDADOR/MÉDICO                   */}
-{/* ======================================================== */}
-{selectedCaregiver && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 animate-fadeIn p-4">
-    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-      
-      <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
-        <h2 className="text-xl font-bold">Perfil del Activo</h2>
-        <button onClick={() => setSelectedCaregiver(null)} className="text-white hover:text-blue-200 font-bold text-xl">&times;</button>
-      </div>
+      <VisitsOverviewModal
+        open={showVisitsDetail}
+        onClose={() => setShowVisitsDetail(false)}
+        detail={visitsDetail}
+        totalPacientes={stats.totalPatients}
+      />
 
-      <div className="p-6 overflow-y-auto">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="text-5xl">👤</div>
-          <div>
-            <h3 className="text-2xl font-bold text-gray-800">{selectedCaregiver.fullName}</h3>
-            <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-bold">ID: {selectedCaregiver.identification}</span>
-          </div>
-        </div>
+      <AssignModal
+        caregiver={caregiverToAssign}
+        pacientesLibres={patients.filter(p => !p.caregiverId)}
+        onAssign={handleAssignPatient}
+        onClose={() => setCaregiverToAssign(null)}
+      />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <h4 className="font-bold text-gray-700 mb-2">Datos de Acceso</h4>
-            <p className="text-sm text-gray-600"><strong>Código:</strong> {selectedCaregiver.accessCode}</p>
-          </div>
-          
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <h4 className="font-bold text-gray-700 mb-2">Estado de Asignación</h4>
-            <p className="text-sm text-gray-600">
-              <strong>Paciente:</strong> {
-                patients.find(p => String(p.caregiverId) === String(selectedCaregiver.id))?.fullName || 'Sin paciente asignado'
-              }
-            </p>
-          </div>
-        </div>
-      </div>
+      <LogsModal data={logsModal} onClose={() => setLogsModal(null)} />
 
-      <div className="p-4 bg-gray-50 border-t border-gray-200 text-right">
-        <button onClick={() => setSelectedCaregiver(null)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded font-bold hover:bg-gray-400 transition">Cerrar</button>
-      </div>
-    </div>
-  </div>
-)}                                {/* MODAL: PERFIL COMPLETO DEL PACIENTE */}
-      {selectedPatient && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 animate-fadeIn p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-            
-            <div className="bg-green-700 p-5 text-white flex justify-between items-center shrink-0">
-              <h2 className="text-xl font-bold flex items-center gap-2"><MdElderly className="text-2xl" /> Perfil Detallado del Paciente</h2>
-              <button onClick={() => setSelectedPatient(null)} className="text-white hover:text-green-200 text-2xl"><MdClose /></button>
-            </div>
+      <ProfessionalModal
+        data={visitsModal}
+        pro={selectedPro}
+        onClose={() => { setVisitsModal(null); setSelectedPro(null); }}
+      />
 
-            <div className="p-8 overflow-y-auto bg-gray-50 flex-1">
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-6 flex flex-col md:flex-row items-center gap-6">
-                <div className="w-24 h-24 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-4xl shadow-inner">
-                  <MdElderly />
-                </div>
-                <div>
-                  <h3 className="text-3xl font-bold text-gray-800 mb-1">{selectedPatient.fullName}</h3>
-                  <div className="flex gap-3 text-sm">
-                    <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-bold">Edad: {selectedPatient.age} años</span>
-                    <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-bold">ID: {selectedPatient.id}</span>
-                  </div>
-                </div>
-              </div>
+      <PatientModal
+        patient={selectedPatient}
+        caregivers={caregivers}
+        onClose={() => setSelectedPatient(null)}
+      />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h4 className="font-bold text-gray-700 mb-4 border-b pb-2 flex items-center gap-2"><MdPerson /> Información Demográfica</h4>
-                  <ul className="text-sm space-y-3 text-gray-600">
-                    <li className="flex justify-between"><strong className="text-gray-500">Estrato:</strong> <span className="font-medium text-gray-900">{selectedPatient.stratum || 'No registrado'}</span></li>
-                    <li className="flex justify-between"><strong className="text-gray-500">Dirección:</strong> <span className="font-medium text-gray-900">{selectedPatient.address || 'No registrado'}</span></li>
-                    <li className="flex justify-between"><strong className="text-gray-500">Teléfono:</strong> <span className="font-medium text-gray-900">{selectedPatient.phone || selectedPatient.contactPhone || 'No registrado'}</span></li>
-                  </ul>
-                </div>
+      <NewPatientModal
+        open={showPatientForm}
+        onClose={() => setShowPatientForm(false)}
+        data={newPatientData}
+        setData={setNewPatientData}
+        onSubmit={handleCreatePatient}
+        saving={saving}
+      />
 
-                <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 shadow-sm">
-                  <h4 className="font-bold text-blue-900 mb-4 border-b border-blue-200 pb-2 flex items-center gap-2"><MdHealthAndSafety /> Información Clínica y Cuidados</h4>
-                  <ul className="text-sm space-y-3 text-blue-900">
-                    <li className="flex flex-col gap-1"><strong className="text-blue-700">Diagnóstico Principal:</strong> <span className="font-medium bg-white px-2 py-1 rounded border border-blue-100">{selectedPatient.diagnosis || 'Sin diagnóstico'}</span></li>
-                    <li className="flex flex-col gap-1 mt-2"><strong className="text-blue-700">Cuidador Asignado:</strong> 
-                       <span className="font-medium bg-white px-2 py-1 rounded border border-blue-100">
-                         {caregivers.find(c => String(c.id) === String(selectedPatient.caregiverId))?.fullName || 'Ninguno asignado'}
-                       </span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="md:col-span-2 bg-yellow-50 p-6 rounded-xl border border-yellow-200 shadow-sm">
-                  <h4 className="font-bold text-yellow-800 mb-3 flex items-center gap-2"><MdEditNote /> Instrucciones Particulares de Cuidado</h4>
-                  <p className="text-sm text-gray-700 bg-white p-4 rounded-lg border border-yellow-100">
-                    {selectedPatient.careInstructions || 'No se han registrado instrucciones especiales para este paciente.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-4 bg-white border-t border-gray-200 text-right shrink-0">
-              <button onClick={() => setSelectedPatient(null)} className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg font-bold hover:bg-gray-300 transition">Cerrar Perfil</button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      <NewProfessionalModal
+        open={showProForm}
+        onClose={() => setShowProForm(false)}
+        data={newProData}
+        setData={setNewProData}
+        onSubmit={handleCreateProfessional}
+        saving={saving}
+      />
     </div>
   );
 }
 
-// --- COMPONENTE TABS ---
-function TabBtn({active, onClick, label, count, icon}) {
-    return (
-        <button onClick={onClick} className={`whitespace-nowrap py-4 px-4 border-b-2 flex items-center gap-2 transition duration-200 outline-none ${active ? 'border-blue-600 text-blue-900 bg-blue-50/50' : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-50'}`}>
-            <span className="text-lg">{icon}</span><span className="font-medium text-sm">{label}</span>{count > 0 && (<span className={`px-2 py-0.5 rounded-full text-xs font-bold ml-1 ${active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>{count}</span>)}
-        </button>
-    )
+// ============================================================================
+// Navegación por pestañas
+// ============================================================================
+
+function NavTabs({ tabs, counts, active, onChange }) {
+  const refs = useRef({});
+
+  // Flechas para moverse entre pestañas, Inicio y Fin a los extremos.
+  // Sin esto la barra es un montón de botones sueltos para el teclado.
+  const onKeyDown = (e) => {
+    const idx = tabs.findIndex(t => t.id === active);
+    let next = null;
+    if (e.key === 'ArrowRight') next = tabs[(idx + 1) % tabs.length];
+    else if (e.key === 'ArrowLeft') next = tabs[(idx - 1 + tabs.length) % tabs.length];
+    else if (e.key === 'Home') next = tabs[0];
+    else if (e.key === 'End') next = tabs[tabs.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    onChange(next.id);
+    refs.current[next.id]?.focus();
+  };
+
+  return (
+    <div className="bg-white border-b border-ink-200">
+      <div
+        role="tablist"
+        aria-label="Secciones del panel"
+        onKeyDown={onKeyDown}
+        className="max-w-[1400px] mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto"
+      >
+        {tabs.map(tab => {
+          const isActive = active === tab.id;
+          const count = counts[tab.id];
+          return (
+            <button
+              key={tab.id}
+              ref={el => { refs.current[tab.id] = el; }}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
+              onClick={() => onChange(tab.id)}
+              className={[
+                'relative flex items-center gap-2 whitespace-nowrap min-h-12 px-3.5',
+                'text-sm font-medium transition-colors duration-150',
+                'after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:transition-colors',
+                isActive
+                  ? 'text-brand-700 after:bg-brand-700'
+                  : 'text-ink-600 hover:text-ink-900 after:bg-transparent'
+              ].join(' ')}
+            >
+              <span aria-hidden="true" className="text-base">{tab.icon}</span>
+              {tab.label}
+              {count > 0 && (
+                <span
+                  className={[
+                    'ml-0.5 rounded-full px-1.5 py-0.5 text-2xs font-semibold',
+                    isActive ? 'bg-brand-700 text-white' : 'bg-ink-100 text-ink-600'
+                  ].join(' ')}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Modal · cumplimiento de bitácoras
+// ============================================================================
+
+function ComplianceModal({ open, onClose, detail }) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="lg"
+      tone="neutral"
+      icon={<MdEditNote />}
+      title="Cumplimiento de bitácoras"
+      subtitle={`Últimos 7 días · se espera una bitácora diaria por cada paciente asignado · umbral configurado: ${UMBRAL_CUMPLIMIENTO}%`}
+      footer={
+        <>
+          <div className="flex flex-wrap gap-4 text-xs text-ink-500 mr-auto">
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-xs bg-brand-600" /> Día completo
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-xs bg-brand-200" /> Parcial
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-xs bg-ink-200" /> Sin bitácora
+            </span>
+          </div>
+          <Button variant="primary" onClick={onClose}>Cerrar</Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        <StatCard label="Cuidadores evaluados" value={detail.filas.length} />
+        <StatCard label={`Cumplen (≥${UMBRAL_CUMPLIMIENTO}%)`} value={detail.cumplen.length} />
+        <StatCard label="No cumplen" value={detail.incumplen.length} />
+      </div>
+
+      {detail.filas.length === 0 ? (
+        <EmptyState
+          icon={<MdEditNote />}
+          title="No hay cuidadores con pacientes asignados"
+          description="El cumplimiento se mide sobre los pacientes que ya tienen cuidador. Asigna pacientes para poder medirlo."
+        />
+      ) : (
+        <div className="space-y-3">
+          {detail.filas.map(fila => {
+            const cumple = fila.percent !== null && fila.percent >= UMBRAL_CUMPLIMIENTO;
+            return (
+              <Card key={fila.caregiverId} className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+                      {cumple
+                        ? <MdCheckCircle aria-hidden="true" className="text-ok shrink-0" />
+                        : <MdWarning aria-hidden="true" className="text-risk shrink-0" />}
+                      {fila.name}
+                      <span className="sr-only">{cumple ? '· cumple' : '· no cumple'}</span>
+                    </p>
+                    <p className="text-xs text-ink-500 mt-1">
+                      C.C. {fila.identification || 'sin registrar'} · {fila.pacientes.length}{' '}
+                      {fila.pacientes.length === 1 ? 'paciente' : 'pacientes'}:{' '}
+                      {fila.pacientes.map(p => p.fullName).join(', ')}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-2xl font-bold text-ink-900 leading-none" data-numeral>{fila.percent}%</p>
+                    <p className="text-xs text-ink-500 mt-1.5">
+                      {fila.registradas} de {fila.esperado} bitácoras
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-1.5 mt-4">
+                  {fila.dias.map(d => (
+                    <div key={d.key} className="flex-1 text-center">
+                      <div
+                        title={`${d.cubiertos} de ${d.total} bitácoras`}
+                        className={[
+                          'h-8 rounded-xs flex items-center justify-center text-xs font-semibold',
+                          d.completo
+                            ? 'bg-brand-600 text-white'
+                            : d.cubiertos > 0
+                              ? 'bg-brand-200 text-brand-900'
+                              : 'bg-ink-200 text-ink-600'
+                        ].join(' ')}
+                      >
+                        {d.cubiertos}/{d.total}
+                      </div>
+                      <p className="text-2xs text-ink-500 mt-1 capitalize">{d.label} {d.dayNum}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ============================================================================
+// Modal · visitas
+// ============================================================================
+
+function VisitsOverviewModal({ open, onClose, detail, totalPacientes }) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="lg"
+      tone="neutral"
+      icon={<MdMedicalServices />}
+      title="Visitas domiciliarias"
+      subtitle="Oportunidad médica medida sobre una ventana de 5 días"
+      footer={<Button variant="primary" onClick={onClose}>Cerrar</Button>}
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <StatCard label="Visitas registradas" value={detail.totalVisitas} formula="Total histórico." />
+        <StatCard label="En los últimos 5 días" value={detail.totalRecientes} />
+        <StatCard
+          label="Pacientes al día"
+          value={totalPacientes > 0 ? detail.pacientesAlDia : null}
+          formula={totalPacientes > 0 ? `${detail.pacientesAlDia} de ${totalPacientes} registrados` : null}
+          hint="Se calcula cuando haya pacientes registrados."
+        />
+      </div>
+
+      <section className="mb-6">
+        <h3 className="text-sm font-semibold text-ink-900 mb-3">Visitas por profesional</h3>
+        {detail.filasPro.length === 0 ? (
+          <EmptyState icon={<MdMedicalServices />} title="Todavía no se ha registrado ninguna visita" />
+        ) : (
+          <Table minWidth="min-w-[520px]">
+            <thead>
+              <tr>
+                <Th>Profesional</Th>
+                <Th align="center">Total</Th>
+                <Th align="center">Últimos 5 días</Th>
+                <Th align="right">Última visita</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.filasPro.map(pro => (
+                <Tr key={pro.id}>
+                  <Td>
+                    <p className="font-medium text-ink-900">{pro.name}</p>
+                    <p className="text-xs text-ink-500 mt-0.5">{pro.position || <SinRegistrar />}</p>
+                  </Td>
+                  <Td align="center" className="font-semibold">{pro.total}</Td>
+                  <Td align="center">{pro.recientes}</Td>
+                  <Td align="right" className="text-ink-500 text-xs">
+                    {pro.ultima ? pro.ultima.toLocaleDateString('es-CO') : <SinRegistrar />}
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </section>
+
+      <section>
+        <h3 className="text-sm font-semibold text-ink-900 mb-3">Estado por paciente</h3>
+        {detail.filasPaciente.length === 0 ? (
+          <EmptyState icon={<MdLocalHospital />} title="No hay pacientes registrados" />
+        ) : (
+          <Table minWidth="min-w-[520px]">
+            <thead>
+              <tr>
+                <Th>Paciente</Th>
+                <Th align="center">Visitas</Th>
+                <Th align="right">Última visita</Th>
+                <Th align="right">Estado</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.filasPaciente.map(p => (
+                <Tr key={p.id}>
+                  <Td className="font-medium text-ink-900">{p.name}</Td>
+                  <Td align="center" className="font-semibold">{p.total}</Td>
+                  <Td align="right" className="text-ink-500 text-xs">
+                    {p.ultima
+                      ? `${p.ultima.toLocaleDateString('es-CO')} · hace ${p.diasSin} d`
+                      : 'Nunca visitado'}
+                  </Td>
+                  <Td align="right">
+                    <Badge tone={p.alDia ? 'ok' : 'warn'}>{p.alDia ? 'Al día' : 'Pendiente'}</Badge>
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </section>
+    </Modal>
+  );
+}
+
+// ============================================================================
+// Modal · asignar paciente
+// ============================================================================
+
+function AssignModal({ caregiver, pacientesLibres, onAssign, onClose }) {
+  return (
+    <Modal
+      open={Boolean(caregiver)}
+      onClose={onClose}
+      size="sm"
+      title="Asignar paciente"
+      subtitle={caregiver ? `Cuidador: ${caregiver.fullName}` : undefined}
+      icon={<MdGroups />}
+      footer={<Button variant="secondary" onClick={onClose}>Cancelar</Button>}
+    >
+      {pacientesLibres.length === 0 ? (
+        <EmptyState
+          icon={<MdLocalHospital />}
+          title="No hay pacientes sin cuidador"
+          description="Todos los pacientes registrados ya tienen a alguien a cargo."
+        />
+      ) : (
+        <ul className="divide-y divide-ink-100 rounded-lg border border-ink-200 bg-white overflow-hidden">
+          {pacientesLibres.map(p => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => onAssign(p.id)}
+                className="w-full text-left min-h-12 px-4 py-3 text-sm text-ink-900 hover:bg-brand-50 transition-colors"
+              >
+                <span className="font-medium">{p.fullName}</span>
+                {p.diagnosis && <span className="block text-xs text-ink-500 mt-0.5">{p.diagnosis}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
+  );
+}
+
+// ============================================================================
+// Modal · bitácoras
+// ============================================================================
+
+function LogsModal({ data, onClose }) {
+  return (
+    <Modal
+      open={Boolean(data)}
+      onClose={onClose}
+      size="lg"
+      tone="neutral"
+      icon={<MdEventNote />}
+      title="Bitácoras y visitas"
+      subtitle={data?.nombre}
+      footer={<Button variant="primary" onClick={onClose}>Cerrar</Button>}
+    >
+      {!data?.registros?.length ? (
+        <EmptyState
+          icon={<MdEventNote />}
+          title="No hay registros"
+          description="Cuando el cuidador registre una bitácora o un profesional una visita, aparecerán aquí."
+        />
+      ) : (
+        <div className="space-y-4">
+          {data.registros.map((log, idx) => (
+            log.recordType === 'PROFESIONAL'
+              ? <VisitaCard key={`v-${idx}`} visita={log} />
+              : <BitacoraCard key={`l-${idx}`} log={log} />
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function VisitaCard({ visita }) {
+  let f = {};
+  try { f = JSON.parse(visita.formData); } catch { f = {}; }
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-ink-100">
+        <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+          <MdMedicalServices aria-hidden="true" className="text-brand-600" />
+          {new Date(visita.date).toLocaleDateString('es-CO')}
+          {visita.time && <span className="font-normal text-ink-500">· {visita.time}</span>}
+        </p>
+        <Badge tone="brand">Visita profesional</Badge>
+      </div>
+      <CardBody className="pt-4">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Dato label="Motivo" value={f.reason} />
+          <Dato label="Diagnóstico" value={f.diagnosisMain} />
+          <Dato label="Conducta a seguir" value={f.conduct} className="sm:col-span-2" />
+        </dl>
+      </CardBody>
+    </Card>
+  );
+}
+
+function BitacoraCard({ log }) {
+  let data = {};
+  try { data = JSON.parse(log.content); } catch { data = { observations: log.content }; }
+
+  const alerta = Array.isArray(data.alerts) && data.alerts.length > 0;
+  const cuidados = [
+    { label: 'Higiene', hecho: data.hygiene === 'Sí' },
+    { label: 'Cambio de ropa', hecho: data.clothes === 'Sí' },
+    { label: 'Piel hidratada', hecho: data.skin === 'Sí' },
+    { label: 'Cambios de posición', hecho: data.position === 'Sí' }
+  ];
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-ink-100">
+        <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+          <MdEventNote aria-hidden="true" className="text-ink-500" />
+          {new Date(log.date).toLocaleDateString('es-CO')}
+          <span className="font-normal text-ink-500">
+            · {new Date(log.date).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </p>
+        <Badge tone={alerta || data.generalState === 'Peor' ? 'risk' : 'ok'}>
+          {data.generalState || 'Estable'}
+        </Badge>
+      </div>
+
+      <CardBody className="pt-4 space-y-4">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Dato label="Nivel de conciencia" value={data.alertLevel} />
+          <Dato label="Movilidad" value={data.mobility} />
+          <Dato label="Ingesta" value={data.feeding} />
+          <Dato label="Hidratación" value={data.hydration} />
+          <Dato label="Medicamentos suministrados" value={data.medsGiven} />
+          {data.medsReason && <Dato label="Motivo de no suministro" value={data.medsReason} />}
+        </dl>
+
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-500 mb-2">
+            Cuidados básicos
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {cuidados.map(c => (
+              <li key={c.label}>
+                <Badge tone={c.hecho ? 'ok' : 'neutral'} icon={c.hecho ? <MdCheckCircle /> : undefined}>
+                  {c.label}{c.hecho ? '' : ': sin registrar'}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {alerta && (
+          <p role="alert" className="flex items-start gap-2.5 rounded-md border border-risk-border bg-risk-soft px-3.5 py-3 text-sm text-risk-strong">
+            <MdWarning aria-hidden="true" className="text-base shrink-0 mt-0.5" />
+            <span>
+              <strong className="font-semibold">Alertas:</strong> {data.alerts.join(', ')}
+              {data.alertDesc && <span className="block mt-1">{data.alertDesc}</span>}
+            </span>
+          </p>
+        )}
+
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-500 mb-2">Observaciones</p>
+          <p className="text-sm text-ink-800 leading-relaxed measure">
+            {data.observations || data.notes || <SinRegistrar />}
+          </p>
+        </div>
+
+        <p className="flex items-center justify-end gap-2 pt-3 border-t border-ink-100 text-xs text-ink-500">
+          Firma:
+          {data.signature
+            ? <span className="text-sm font-medium text-ink-900">{data.signature}</span>
+            : <SinRegistrar className="text-xs" />}
+        </p>
+      </CardBody>
+    </Card>
+  );
+}
+
+// ============================================================================
+// Modal · perfil del profesional
+// ============================================================================
+
+function ProfessionalModal({ data, pro, onClose }) {
+  // La calificación se calcula sobre las visitas realmente evaluadas. El
+  // panel anterior mostraba este bloque dos veces: una calculada y otra
+  // con el valor estático, con cifras distintas.
+  const evaluadas = (data?.visitas || []).filter(v => v.rating && Number(v.rating) > 0);
+  const promedio = evaluadas.length > 0
+    ? (evaluadas.reduce((a, v) => a + Number(v.rating), 0) / evaluadas.length).toFixed(1)
+    : null;
+
+  return (
+    <Modal
+      open={Boolean(data)}
+      onClose={onClose}
+      size="lg"
+      icon={<MdMedicalServices />}
+      title={data?.nombre || 'Profesional'}
+      subtitle={pro?.position || 'Cargo sin registrar'}
+      footer={<Button variant="primary" onClick={onClose}>Cerrar</Button>}
+    >
+      <Card className="mb-5">
+        <CardHeader title="Perfil del profesional" />
+        <CardBody>
+          <dl className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            <Dato label="Cédula" value={pro?.identification} />
+            <Dato label="Cargo" value={pro?.position} />
+            <Dato label="Contacto" value={pro?.phone} />
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
+                Calificación
+              </dt>
+              <dd className="mt-1">
+                {promedio ? (
+                  <span className="flex items-center gap-1.5">
+                    <MdStar aria-hidden="true" className="text-accent-500" />
+                    <span className="text-sm font-semibold text-ink-900" data-numeral>{promedio}</span>
+                    <span className="text-xs text-ink-500">
+                      de {evaluadas.length} {evaluadas.length === 1 ? 'evaluación' : 'evaluaciones'}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-sm"><SinRegistrar /></span>
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-5 pt-5 border-t border-ink-100">
+            {pro?.resumeFile ? (
+              <a
+                href={fileUrl(`/uploads/${pro.resumeFile}`)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 min-h-11 text-sm font-medium text-brand-700 hover:text-brand-800 underline underline-offset-2"
+              >
+                <MdInsertDriveFile aria-hidden="true" />
+                Ver hoja de vida
+              </a>
+            ) : (
+              <p className="text-sm text-ink-500">Hoja de vida: <SinRegistrar /></p>
+            )}
+          </div>
+        </CardBody>
+      </Card>
+
+      <h3 className="text-sm font-semibold text-ink-900 mb-3">
+        Visitas realizadas
+        {data?.visitas?.length > 0 && (
+          <span className="font-normal text-ink-500"> · {data.visitas.length}</span>
+        )}
+      </h3>
+
+      {!data?.visitas?.length ? (
+        <EmptyState
+          icon={<MdCalendarToday />}
+          title="Este profesional aún no ha registrado visitas"
+        />
+      ) : (
+        <div className="space-y-4">
+          {data.visitas.map((v, i) => {
+            let f = {};
+            try { f = JSON.parse(v.formData); } catch { f = {}; }
+            return (
+              <Card key={i}>
+                <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-ink-100">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+                    <MdCalendarToday aria-hidden="true" className="text-brand-600" />
+                    {new Date(v.date).toLocaleDateString('es-CO')}
+                    {v.time && <span className="font-normal text-ink-500">· {v.time}</span>}
+                  </p>
+                  <Badge tone="brand">Atención domiciliaria</Badge>
+                </div>
+                <CardBody className="pt-4 space-y-4">
+                  <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Dato label="Paciente" value={v.patientName} />
+                    <Dato label="Motivo de consulta" value={f.reason} />
+                    <Dato label="Diagnóstico" value={f.diagnosisMain} />
+                  </dl>
+                  <Dato label="Conducta o plan a seguir" value={f.conduct} />
+
+                  {v.rating ? (
+                    <div className="rounded-md border border-ink-200 bg-ink-50 px-4 py-3.5">
+                      <p className="text-xs font-medium uppercase tracking-wide text-ink-500 mb-2">
+                        Evaluación del paciente
+                      </p>
+                      <p className="flex items-center gap-1">
+                        {[...Array(5)].map((_, index) => (
+                          <MdStar
+                            key={index}
+                            aria-hidden="true"
+                            className={index < v.rating ? 'text-accent-500' : 'text-ink-300'}
+                          />
+                        ))}
+                        <span className="ml-2 text-sm font-semibold text-ink-900" data-numeral>
+                          {v.rating} de 5
+                        </span>
+                      </p>
+                      {v.evalComments && (
+                        <p className="mt-2.5 text-sm text-ink-700 measure">{v.evalComments}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-ink-500">Esta visita aún no ha sido calificada.</p>
+                  )}
+                </CardBody>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ============================================================================
+// Modal · perfil del paciente
+// ============================================================================
+
+function PatientModal({ patient, caregivers, onClose }) {
+  if (!patient) return null;
+  const cuidador = caregivers.find(c => String(c.id) === String(patient.caregiverId));
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      tone="ok"
+      icon={<MdPerson />}
+      title={patient.fullName}
+      subtitle={patient.age ? `${patient.age} años` : 'Edad sin registrar'}
+      footer={<Button variant="primary" onClick={onClose}>Cerrar</Button>}
+    >
+      <div className="space-y-5">
+        <Card>
+          <CardHeader title="Información demográfica" />
+          <CardBody>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Dato label="Estrato" value={patient.stratum} />
+              <Dato label="Teléfono" value={patient.phone || patient.contactPhone} />
+              <Dato label="Dirección" value={patient.address} className="sm:col-span-2" />
+              <Dato label="Zona" value={[patient.zoneCategory, patient.zoneDetail].filter(Boolean).join(' · ')} className="sm:col-span-2" />
+            </dl>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader title="Información clínica y cuidado" />
+          <CardBody>
+            <dl className="space-y-4">
+              <Dato label="Diagnóstico principal" value={patient.diagnosis} />
+              <Dato label="Cuidador asignado" value={cuidador?.fullName} />
+              <Dato label="Instrucciones particulares de cuidado" value={patient.careInstructions} />
+            </dl>
+          </CardBody>
+        </Card>
+      </div>
+    </Modal>
+  );
+}
+
+// ============================================================================
+// Modal · nuevo paciente
+// ============================================================================
+
+function NewPatientModal({ open, onClose, data, setData, onSubmit, saving }) {
+  const set = (k) => (e) => setData({ ...data, [k]: e.target.value });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="md"
+      icon={<MdAdd />}
+      title="Registrar paciente"
+      subtitle="Támesis, Antioquia"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" type="submit" form="form-nuevo-paciente" loading={saving}>
+            Guardar paciente
+          </Button>
+        </>
+      }
+    >
+      <form id="form-nuevo-paciente" onSubmit={onSubmit} className="space-y-5">
+        <Field label="Nombre completo" required>
+          {(p) => <input {...p} value={data.fullName} onChange={set('fullName')} autoComplete="off" />}
+        </Field>
+
+        <Field
+          label="Cédula del paciente"
+          required
+          hint="Con este documento el sistema asigna automáticamente al cuidador que lo registre en su postulación."
+        >
+          {(p) => <input {...p} inputMode="numeric" value={data.identification} onChange={set('identification')} />}
+        </Field>
+
+        <Field
+          label="Correo electrónico"
+          required
+          hint="A este correo se le envía el código de acceso del paciente."
+        >
+          {(p) => <input {...p} type="email" value={data.email} onChange={set('email')} />}
+        </Field>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Edad" required>
+            {(p) => <input {...p} type="number" min="0" max="120" value={data.age} onChange={set('age')} />}
+          </Field>
+          <Field label="Estrato" required>
+            {(p) => (
+              <select {...p} value={data.stratum} onChange={set('stratum')}>
+                <option value="">Seleccionar…</option>
+                {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>Estrato {n}</option>)}
+              </select>
+            )}
+          </Field>
+        </div>
+
+        <Field label="Teléfono de contacto">
+          {(p) => <input {...p} type="tel" value={data.contactPhone} onChange={set('contactPhone')} />}
+        </Field>
+
+        <Field label="Diagnóstico" required>
+          {(p) => (
+            <select {...p} value={data.diagnosis} onChange={set('diagnosis')}>
+              <option value="">Seleccionar…</option>
+              {COMMON_DISEASES.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+        </Field>
+
+        <fieldset className="rounded-lg border border-ink-200 bg-white p-4 space-y-4">
+          <legend className="px-1.5 text-xs font-medium uppercase tracking-wide text-ink-600">
+            Ubicación en Támesis
+          </legend>
+
+          <Field label="Zona principal" required>
+            {(p) => (
+              <select
+                {...p}
+                value={data.zoneCategory}
+                onChange={(e) => setData({ ...data, zoneCategory: e.target.value, zoneDetail: '' })}
+              >
+                <option value="">Seleccionar…</option>
+                {Object.keys(TAMESIS_ZONES).map(z => <option key={z} value={z}>{z}</option>)}
+              </select>
+            )}
+          </Field>
+
+          <Field label="Corregimiento, vereda o barrio" required>
+            {(p) => (
+              <select {...p} value={data.zoneDetail} onChange={set('zoneDetail')} disabled={!data.zoneCategory}>
+                <option value="">
+                  {data.zoneCategory ? 'Seleccionar…' : 'Elige primero la zona principal'}
+                </option>
+                {data.zoneCategory && TAMESIS_ZONES[data.zoneCategory].map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            )}
+          </Field>
+
+          <Field label="Dirección exacta o puntos de referencia" required>
+            {(p) => <input {...p} value={data.address} onChange={set('address')} />}
+          </Field>
+        </fieldset>
+
+        <Field label="Instrucciones de cuidado">
+          {(p) => <textarea {...p} rows={3} value={data.careInstructions} onChange={set('careInstructions')} />}
+        </Field>
+      </form>
+    </Modal>
+  );
+}
+
+// ============================================================================
+// Modal · nuevo profesional
+// ============================================================================
+
+function NewProfessionalModal({ open, onClose, data, setData, onSubmit, saving }) {
+  const set = (k) => (e) => setData({ ...data, [k]: e.target.value });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="sm"
+      icon={<MdMedicalServices />}
+      title="Registrar profesional"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" type="submit" form="form-nuevo-profesional" loading={saving}>
+            Registrar
+          </Button>
+        </>
+      }
+    >
+      <form id="form-nuevo-profesional" onSubmit={onSubmit} className="space-y-5">
+        <Field label="Nombre completo" required>
+          {(p) => <input {...p} value={data.fullName} onChange={set('fullName')} />}
+        </Field>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Cédula" required>
+            {(p) => <input {...p} inputMode="numeric" value={data.identification} onChange={set('identification')} />}
+          </Field>
+          <Field label="Teléfono" required>
+            {(p) => <input {...p} type="tel" value={data.phone} onChange={set('phone')} />}
+          </Field>
+        </div>
+
+        <Field label="Correo electrónico" required>
+          {(p) => <input {...p} type="email" value={data.email} onChange={set('email')} />}
+        </Field>
+
+        <Field label="Cargo" required hint="Por ejemplo: médico general, enfermera jefe.">
+          {(p) => <input {...p} value={data.position} onChange={set('position')} />}
+        </Field>
+
+        <Field label="Hoja de vida">
+          {(p) => (
+            <input
+              {...p}
+              type="file"
+              accept=".pdf,.doc,.docx,image/*"
+              onChange={(e) => setData({ ...data, resumeFile: e.target.files[0] })}
+              className="w-full min-h-11 rounded-md border border-ink-400 bg-white px-3 py-2 text-sm text-ink-700 file:mr-3 file:rounded file:border-0 file:bg-ink-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink-700 hover:file:bg-ink-200"
+            />
+          )}
+        </Field>
+      </form>
+    </Modal>
+  );
 }

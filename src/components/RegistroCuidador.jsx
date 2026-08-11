@@ -19,7 +19,9 @@ export default function DashboardCuidador({ user, onLogout }) {
         formData.append('certificate', file);
 
         try {
-            const res = await apiFetch(`/api/upload-certificate/${myid}`, {
+            // Antes decía `${myid}`, una variable que no existe: al subir el
+            // certificado lanzaba ReferenceError y la pantalla se caía.
+            const res = await apiFetch(`/api/upload-certificate/${user.id}`, {
                 method: 'POST',
                 body: formData
             });

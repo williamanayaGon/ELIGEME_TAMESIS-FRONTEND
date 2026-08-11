@@ -1,289 +1,528 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-// Importamos los iconos de react-icons
-import { FaUserCircle, FaNotesMedical, FaStar, FaRobot, FaBell, FaTimes, FaSignOutAlt, FaCalendarPlus} from 'react-icons/fa';
+import {
+  MdPerson, MdAssignment, MdStar, MdSmartToy, MdLogout,
+  MdEventNote, MdMedicalServices, MdSend, MdCheckCircle
+} from 'react-icons/md';
+
 import { apiFetch } from '../lib/api';
+import {
+  Modal, Button, Badge, EmptyState,
+  Card, CardHeader, CardBody,
+  Dato, SinRegistrar, Field,
+  Skeleton
+} from './ui';
+
+/**
+ * Portal del paciente.
+ *
+ * Es la superficie con el usuario más vulnerable del programa: adultos
+ * mayores, a veces con visión reducida, muchas veces desde el teléfono de
+ * un familiar. Por eso aquí el cuerpo de texto sube un escalón respecto al
+ * resto de la aplicación, las acciones son pocas y grandes, y lo único que
+ * exige atención se anuncia arriba en lugar de esconderse en una tarjeta.
+ */
 
 export default function DashboardPaciente({ user, onLogout }) {
-  const [activeModal, setActiveModal] = useState(null); // 'HISTORIA', 'CALIFICAR', 'IA'
-  
-  // Estados para datos
-  const [patientData, setPatientData] = useState({ name: user?.name || "Paciente", status: "Activo" });
-  const [historyData, setHistoryData] = useState({ logs: [], visits: [] });
-  
-  // Estados para Calificación
+  const [activeModal, setActiveModal] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const [logs, setLogs] = useState([]);
+  const [visits, setVisits] = useState([]);
+  const [pendingVisit, setPendingVisit] = useState(null);
+
   const [rating, setRating] = useState(0);
   const [evalComments, setEvalComments] = useState('');
-  const [pendingVisitId, setPendingVisitId] = useState(null);
+  const [sending, setSending] = useState(false);
 
-  // Estados para la IA
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isLoadingAi, setIsLoadingAi] = useState(false);
 
-  // --- CARGAR DATOS AL INICIAR ---
-  useEffect(() => {
-    fetchPatientData();
-  }, []);
+  // --------------------------------------------------------------------------
+  // Carga
+  // --------------------------------------------------------------------------
 
- // --- CARGAR DATOS AL INICIAR ---
-  const fetchPatientData = async () => {
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      // 1. Cargar las bitácoras usando la ruta que compartiste
-      const resLogs = await apiFetch(`/api/logs?patientId=${user.id}`);
-      
-      if (resLogs.ok) {
-        const logsData = await resLogs.json();
-        
-        setHistoryData(prev => ({ 
-            ...prev, 
-            logs: logsData 
-        }));
+      // Las tres cosas que el paciente puede ver de sí mismo. Antes solo se
+      // pedían las bitácoras: las visitas quedaban siempre vacías en
+      // pantalla y la visita pendiente por calificar nunca se buscaba, así
+      // que el botón de calificar no podía funcionar nunca.
+      const [resLogs, resVisits, resPending] = await Promise.all([
+        apiFetch(`/api/logs?patientId=${user.id}`),
+        apiFetch(`/api/visits?patientId=${user.id}`),
+        apiFetch(`/api/visits/pending-evaluation/${user.id}`)
+      ]);
+
+      // Se vuelve a filtrar por paciente en el cliente aunque la petición
+      // ya lleve `patientId`. Si el backend ignorara ese parámetro, este
+      // panel mostraría a un paciente las visitas y bitácoras de otros:
+      // datos de salud de terceros, categoría sensible bajo la Ley 1581.
+      // El filtro del servidor sigue siendo el que manda; esto es un cierre.
+      const soloMios = (lista) =>
+        (Array.isArray(lista) ? lista : []).filter(
+          (r) => String(r.patientId) === String(user.id)
+        );
+
+      if (resLogs.ok) setLogs(soloMios(await resLogs.json()));
+      if (resVisits.ok) setVisits(soloMios(await resVisits.json()));
+      if (resPending.ok) {
+        const d = await resPending.json();
+        // La ruta puede devolver una visita o una lista, según el caso.
+        const pendiente = Array.isArray(d) ? d[0] : d;
+        setPendingVisit(pendiente && pendiente.id ? pendiente : null);
       }
-    } catch (error) {
-      console.error("Error cargando el historial:", error);
-      toast.error("Error de conexión al cargar la historia clínica");
+    } catch {
+      toast.error('No se pudo conectar con el servidor. Revisa tu conexión.');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [user.id]);
 
-  // --- ENVIAR CALIFICACIÓN ---
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // --------------------------------------------------------------------------
+  // Acciones
+  // --------------------------------------------------------------------------
+
   const handleSendRating = async () => {
-    if (rating === 0) return toast.warning("Por favor selecciona una calificación");
-    if (!pendingVisitId) return toast.info("No tienes visitas pendientes por calificar");
+    if (rating === 0) {
+      toast.warning('Selecciona de una a cinco estrellas.');
+      return;
+    }
+    if (!pendingVisit) return;
 
+    setSending(true);
     try {
       const res = await apiFetch('/api/visits/evaluation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visitId: pendingVisitId, rating, comments: evalComments })
+        body: JSON.stringify({ visitId: pendingVisit.id, rating, comments: evalComments })
       });
       if (res.ok) {
-        toast.success("¡Gracias por calificar el servicio!");
+        toast.success('Gracias por calificar el servicio.');
         setActiveModal(null);
-        setPendingVisitId(null);
-        fetchPatientData(); // Recargar datos
+        setPendingVisit(null);
+        setRating(0);
+        setEvalComments('');
+        fetchData();
       } else {
-        toast.error("Error al enviar calificación");
+        toast.error('No se pudo enviar la calificación.');
       }
-    } catch (error) {
-      toast.error("Error de conexión");
+    } catch {
+      toast.error('Sin conexión con el servidor.');
+    } finally {
+      setSending(false);
     }
   };
 
-  // --- CONSULTAR IA ---
   const handleAskAI = async (e) => {
     e.preventDefault();
     if (!aiPrompt.trim()) return;
-    
+
     setIsLoadingAi(true);
     setAiResponse('');
-    
     try {
-      // ⚠️ Requiere backend: Tu ruta exacta de IA
       const res = await apiFetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: aiPrompt, message: aiPrompt, userType: 'patient' })
       });
-      
       if (res.ok) {
         const data = await res.json();
-        setAiResponse(data.reply || data.response || "No se obtuvo respuesta.");
+        setAiResponse(data.reply || data.response || 'No se obtuvo respuesta.');
       } else {
-        toast.error("Error al consultar la IA");
+        toast.error('No se pudo consultar el asistente.');
       }
-    } catch (error) {
-      toast.error("Error de conexión con la IA");
+    } catch {
+      toast.error('Sin conexión con el asistente.');
     } finally {
       setIsLoadingAi(false);
     }
   };
 
+  const nombre = user?.name || user?.fullName || 'Paciente';
+
+  const acciones = [
+    {
+      id: 'HISTORIA',
+      titulo: 'Mi historia',
+      descripcion: 'Las visitas del médico y las bitácoras de tu cuidador.',
+      icon: <MdAssignment />
+    },
+    {
+      id: 'CALIFICAR',
+      titulo: 'Calificar la atención',
+      descripcion: pendingVisit
+        ? 'Tienes una visita por calificar.'
+        : 'Ahora mismo no tienes visitas por calificar.',
+      icon: <MdStar />,
+      disabled: !pendingVisit
+    },
+    {
+      id: 'IA',
+      titulo: 'Consultar dudas',
+      descripcion: 'Preguntas generales sobre salud y bienestar.',
+      icon: <MdSmartToy />
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans pb-10">
-      
-      {/* --- NAVBAR --- */}
-      <nav className="bg-white shadow-sm px-6 py-4 flex justify-between items-center border-b-4 border-green-600">
-        <div className="flex items-center gap-3">
-          <FaUserCircle className="text-4xl text-green-600" />
-          <div>
-            <h1 className="text-xl font-extrabold text-gray-800">Hola, {patientData.name}</h1>
-            <p className="text-sm font-bold text-green-600">Portal del Paciente</p>
-          </div>
-        </div>
-        <button onClick={onLogout} className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 px-4 rounded-xl text-sm transition">
-          <FaSignOutAlt /> Cerrar Sesión
-        </button>
-      </nav>
+    <div className="min-h-screen bg-ink-50">
 
-      {/* --- CONTENIDO PRINCIPAL --- */}
-      <main className="max-w-5xl mx-auto mt-8 px-4">
-        
-        <div className="bg-gradient-to-r from-green-500 to-green-700 rounded-3xl p-6 md:p-8 text-white shadow-lg mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-black mb-1">Seguimiento de su caso</h2>
-            <p className="text-green-100 font-medium">Estado actual: <b>{patientData.status}</b></p>
-          </div>
-          {pendingVisitId && (
-            <div className="bg-yellow-400 p-4 rounded-2xl text-black text-center shadow-md animate-pulse">
-               <p className="text-sm font-bold uppercase tracking-wider mb-1">Acción Requerida</p>
-               <p className="text-md font-black">Tiene una visita por calificar</p>
+      <header className="bg-brand-800 text-white on-brand shadow-e2">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <span
+              aria-hidden="true"
+              className="shrink-0 h-11 w-11 rounded-full bg-white/15 flex items-center justify-center text-2xl"
+            >
+              <MdPerson />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs text-brand-200">Portal del paciente</p>
+              <h1 className="text-lg font-semibold text-white truncate">{nombre}</h1>
             </div>
-          )}
-        </div>
-
-{/* Grid de Opciones */}
-        {/* Nota: Se cambió a lg:grid-cols-5 para que quepan los 5 en una línea */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-          
-          <button onClick={() => setActiveModal('HISTORIA')} className="bg-white p-6 rounded-3xl shadow-sm hover:shadow-md border border-gray-100 flex flex-col items-center text-center transition transform hover:-translate-y-1">
-            <div className="bg-blue-100 p-4 rounded-full text-blue-600 text-3xl mb-4"><FaNotesMedical /></div>
-            <h3 className="font-bold text-lg text-gray-800 mb-2">Historia Clínica</h3>
-            <p className="text-sm text-gray-500">Sus registros y bitácoras.</p>
-          </button>
-
-          <button onClick={() => setActiveModal('CALIFICAR')} className="bg-white p-6 rounded-3xl shadow-sm hover:shadow-md border border-gray-100 flex flex-col items-center text-center transition transform hover:-translate-y-1 border-b-4 border-b-yellow-400">
-            <div className="bg-yellow-100 p-4 rounded-full text-yellow-600 text-3xl mb-4"><FaStar /></div>
-            <h3 className="font-bold text-lg text-gray-800 mb-2">Calificar Servicio</h3>
-            <p className="text-sm text-gray-500">Evalúe al visitador médico.</p>
-          </button>
-
-          <button onClick={() => setActiveModal('IA')} className="bg-white p-6 rounded-3xl shadow-sm hover:shadow-md border border-gray-100 flex flex-col items-center text-center transition transform hover:-translate-y-1 border-b-4 border-b-purple-500">
-            <div className="bg-purple-100 p-4 rounded-full text-purple-600 text-3xl mb-4"><FaRobot /></div>
-            <h3 className="font-bold text-lg text-gray-800 mb-2">Recomendaciones IA</h3>
-            <p className="text-sm text-gray-500">Consulte dudas de salud general.</p>
-          </button>
-
-          {/* --- NUEVO RECUADRO: AGENDAR CITAS --- */}
-          <button onClick={() => setActiveModal('AGENDAR')} className="bg-white p-6 rounded-3xl shadow-sm hover:shadow-md border border-gray-100 flex flex-col items-center text-center transition transform hover:-translate-y-1 border-b-4 border-b-emerald-400">
-            <div className="bg-emerald-100 p-4 rounded-full text-emerald-600 text-3xl mb-4"><FaCalendarPlus /></div>
-            <h3 className="font-bold text-lg text-gray-800 mb-2">Agendar Citas en Casa</h3>
-            <p className="text-sm text-gray-500">Programe una nueva visita médica.</p>
-          </button>
-          {/* ------------------------------------- */}
-
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center text-center opacity-70">
-            <div className="bg-red-100 p-4 rounded-full text-red-500 text-3xl mb-4"><FaBell /></div>
-            <h3 className="font-bold text-lg text-gray-800 mb-2">Notificaciones</h3>
-            <p className="text-sm text-gray-500">Recordatorios (Próximamente).</p>
           </div>
 
+          <Button
+            variant="ghost"
+            onClick={onLogout}
+            icon={<MdLogout />}
+            className="text-brand-100 hover:bg-white/10 hover:text-white shrink-0"
+          >
+            <span className="hidden sm:inline">Salir</span>
+          </Button>
         </div>
-      </main>
-      {/* ============================== */}
-      {/* MODALES DE ACCIÓN              */}
-      {/* ============================== */}
+      </header>
 
-      {/* Modal: Calificar Servicio */}
-      {activeModal === 'CALIFICAR' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm relative text-center">
-            <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 text-xl"><FaTimes /></button>
-            <h2 className="text-2xl font-black text-gray-800 mb-2">Calificar Visitador</h2>
-            <p className="text-gray-500 text-sm mb-6">¿Qué tal le pareció la atención médica reciente?</p>
-            
-            <div className="flex justify-center gap-2 mb-4 cursor-pointer">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <span key={star} onClick={() => setRating(star)} className={`text-5xl transition-transform ${star <= rating ? 'text-yellow-400 scale-110' : 'text-gray-200 hover:text-yellow-200'}`}>
-                  ★
-                </span>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        {/* Lo que exige acción va arriba y se anuncia. No es una tarjeta más
+            en una rejilla: es el único motivo por el que alguien entraría hoy. */}
+        {!loading && pendingVisit && (
+          <section
+            aria-labelledby="accion-requerida"
+            className="rounded-lg border border-accent-200 bg-accent-50 p-5 sm:p-6 animate-rise"
+          >
+            <h2 id="accion-requerida" className="text-lg font-semibold text-accent-900">
+              Tienes una visita por calificar
+            </h2>
+            <p className="text-md text-accent-800 mt-1.5 measure">
+              {pendingVisit.date
+                ? `El profesional te visitó el ${new Date(pendingVisit.date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}.`
+                : 'Un profesional te visitó recientemente.'}
+              {' '}Tu opinión ayuda a mejorar el servicio.
+            </p>
+            <Button
+              variant="primary"
+              size="lg"
+              icon={<MdStar />}
+              className="mt-4"
+              onClick={() => setActiveModal('CALIFICAR')}
+            >
+              Calificar ahora
+            </Button>
+          </section>
+        )}
+
+        <section aria-label="Acciones disponibles">
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="bg-white border border-ink-200 rounded-lg shadow-e1 p-6">
+                  <Skeleton className="h-11 w-11 rounded-md" />
+                  <Skeleton className="h-5 w-32 mt-4" />
+                  <Skeleton className="h-3.5 w-full mt-2.5" />
+                  <Skeleton className="h-3.5 w-3/4 mt-1.5" />
+                </div>
               ))}
             </div>
-            
-            <textarea 
-               className="w-full border p-2 rounded-xl mb-4 text-sm outline-none" 
-               placeholder="Comentarios (Opcional)" 
-               rows="2"
-               value={evalComments}
-               onChange={(e) => setEvalComments(e.target.value)}
-            />
-
-            <button onClick={handleSendRating} className="w-full bg-yellow-500 text-black font-black py-4 rounded-xl hover:bg-yellow-600 transition">
-              Enviar Calificación
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Asistente IA */}
-      {activeModal === 'IA' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-lg relative flex flex-col h-[80vh]">
-            <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 text-xl"><FaTimes /></button>
-            <h2 className="text-2xl font-black text-purple-700 mb-2 flex items-center gap-2"><FaRobot /> Asistente de Cuidados</h2>
-            <p className="text-gray-500 text-sm mb-4">Consulte recomendaciones generales sobre salud y bienestar.</p>
-            
-            <div className="flex-1 bg-gray-50 rounded-xl p-4 overflow-y-auto mb-4 border">
-              {aiResponse ? (
-                <div className="text-gray-700 whitespace-pre-wrap">{aiResponse}</div>
-              ) : (
-                <div className="text-gray-400 text-center mt-10">Escriba su consulta abajo...</div>
-              )}
-              {isLoadingAi && <div className="text-purple-500 font-bold mt-4 animate-pulse">Generando respuesta...</div>}
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 stagger">
+              {acciones.map(a => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => setActiveModal(a.id)}
+                  disabled={a.disabled}
+                  className={[
+                    'text-left bg-white border border-ink-200 rounded-lg shadow-e1 p-6',
+                    'transition-shadow duration-200',
+                    a.disabled
+                      ? 'opacity-60 cursor-not-allowed'
+                      : 'hover:shadow-e2 hover:border-ink-300'
+                  ].join(' ')}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-brand-50 text-brand-700 text-2xl"
+                  >
+                    {a.icon}
+                  </span>
+                  <h3 className="text-md font-semibold text-ink-900 mt-4">{a.titulo}</h3>
+                  <p className="text-sm text-ink-500 mt-1.5 leading-relaxed">{a.descripcion}</p>
+                </button>
+              ))}
             </div>
+          )}
+        </section>
 
-            <form onSubmit={handleAskAI} className="flex gap-2">
-              <input 
-                type="text" 
-                required 
-                className="flex-1 border-2 border-purple-200 rounded-xl p-3 outline-none focus:border-purple-500" 
-                placeholder="Ej: ¿Qué alimentos son buenos para la hipertensión?"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
+        <section aria-labelledby="resumen">
+          <h2 id="resumen" className="sr-only">Resumen de tu seguimiento</h2>
+          <Card>
+            <CardBody className="pt-5">
+              <dl className="grid grid-cols-2 gap-5">
+                <Dato
+                  label="Visitas del médico"
+                  value={loading ? '…' : visits.length || <SinRegistrar />}
+                />
+                <Dato
+                  label="Bitácoras de tu cuidador"
+                  value={loading ? '…' : logs.length || <SinRegistrar />}
+                />
+              </dl>
+            </CardBody>
+          </Card>
+        </section>
+      </main>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Historia clínica                                                    */}
+      {/* ------------------------------------------------------------------ */}
+      <Modal
+        open={activeModal === 'HISTORIA'}
+        onClose={() => setActiveModal(null)}
+        size="md"
+        icon={<MdAssignment />}
+        title="Mi historia"
+        subtitle="Todo lo que se ha registrado sobre tu cuidado"
+        footer={<Button variant="primary" onClick={() => setActiveModal(null)}>Cerrar</Button>}
+      >
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-sm font-semibold text-ink-900 mb-3">Visitas del médico</h3>
+            {visits.length === 0 ? (
+              <EmptyState
+                icon={<MdMedicalServices />}
+                title="Todavía no hay visitas registradas"
+                description="Cuando un profesional te visite en casa, quedará registrado aquí."
               />
-              <button type="submit" disabled={isLoadingAi} className="bg-purple-600 text-white font-bold px-6 rounded-xl hover:bg-purple-700 disabled:bg-purple-300">
-                Consultar
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Historia Clínica */}
-      {activeModal === 'HISTORIA' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-2xl relative max-h-[90vh] flex flex-col">
-            <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 text-xl"><FaTimes /></button>
-            <h2 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2"><FaNotesMedical className="text-blue-600"/> Mi Historia Clínica</h2>
-            
-            <div className="overflow-y-auto flex-1 pr-2 space-y-6">
-              
-              {/* Sección Visitas */}
-              <div>
-                <h3 className="font-bold text-lg text-gray-700 border-b pb-2 mb-3">Visitas Médicas Recientes</h3>
-                {historyData.visits.length === 0 ? <p className="text-gray-500 text-sm">No hay visitas registradas.</p> : (
-                  <div className="space-y-3">
-                    {historyData.visits.map((visit, i) => (
-                      <div key={i} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        <p className="text-sm font-bold text-blue-600">{new Date(visit.date).toLocaleDateString()}</p>
-                        <p className="text-sm text-gray-700 mt-1">Visita realizada por el profesional de salud.</p>
+            ) : (
+              <ul className="space-y-3">
+                {visits.map((v, i) => (
+                  <li key={v.id ?? i}>
+                    <Card className="p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-ink-900">
+                          {new Date(v.date).toLocaleDateString('es-CO', {
+                            day: 'numeric', month: 'long', year: 'numeric'
+                          })}
+                        </p>
+                        <Badge tone="brand">Visita domiciliaria</Badge>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      {v.professionalName && (
+                        <p className="text-sm text-ink-500 mt-1.5">
+                          Atendida por {v.professionalName}
+                        </p>
+                      )}
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-              {/* Sección Bitácoras */}
-              <div>
-                <h3 className="font-bold text-lg text-gray-700 border-b pb-2 mb-3">Bitácoras del Cuidador</h3>
-                {historyData.logs.length === 0 ? <p className="text-gray-500 text-sm">No hay bitácoras registradas.</p> : (
-                  <div className="space-y-3">
-                    {historyData.logs.map((log, i) => (
-                      <div key={i} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        <p className="text-sm font-bold text-green-600">{new Date(log.date).toLocaleDateString()}</p>
-                        <p className="text-sm text-gray-700 mt-1"><b>Cuidador:</b> {log.caregiverName || "Asignado"}</p>
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">{log.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-            </div>
-          </div>
+          <section>
+            <h3 className="text-sm font-semibold text-ink-900 mb-3">Bitácoras de tu cuidador</h3>
+            {logs.length === 0 ? (
+              <EmptyState
+                icon={<MdEventNote />}
+                title="Todavía no hay bitácoras"
+                description="Tu cuidador registra aquí lo que hace cada día."
+              />
+            ) : (
+              <ul className="space-y-3">
+                {logs.map((log, i) => {
+                  let data = {};
+                  try { data = JSON.parse(log.content); } catch { data = { observations: log.content }; }
+                  return (
+                    <li key={log.id ?? i}>
+                      <Card className="p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-ink-900">
+                            {new Date(log.date).toLocaleDateString('es-CO', {
+                              day: 'numeric', month: 'long', year: 'numeric'
+                            })}
+                          </p>
+                          {data.generalState && (
+                            <Badge tone={data.generalState === 'Peor' ? 'risk' : 'ok'}>
+                              {data.generalState}
+                            </Badge>
+                          )}
+                        </div>
+                        {log.caregiverName && (
+                          <p className="text-sm text-ink-500 mt-1.5">Cuidador: {log.caregiverName}</p>
+                        )}
+                        <p className="text-sm text-ink-800 mt-2.5 leading-relaxed measure">
+                          {data.observations || data.notes || <SinRegistrar />}
+                        </p>
+                      </Card>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
-      )}
+      </Modal>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Calificar                                                           */}
+      {/* ------------------------------------------------------------------ */}
+      <Modal
+        open={activeModal === 'CALIFICAR'}
+        onClose={() => setActiveModal(null)}
+        size="sm"
+        icon={<MdStar />}
+        title="Calificar la atención"
+        subtitle="¿Cómo te pareció la visita del profesional?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setActiveModal(null)}>Cancelar</Button>
+            <Button variant="primary" onClick={handleSendRating} loading={sending} disabled={rating === 0}>
+              Enviar calificación
+            </Button>
+          </>
+        }
+      >
+        {!pendingVisit ? (
+          <EmptyState
+            icon={<MdCheckCircle />}
+            title="No tienes visitas por calificar"
+            description="Cuando un profesional te visite, podrás calificar la atención desde aquí."
+          />
+        ) : (
+          <div className="space-y-6">
+            {/* Radios reales: se puede llegar con Tab y elegir con las flechas. */}
+            <fieldset>
+              <legend className="text-sm font-medium text-ink-700 mb-3">
+                Elige de una a cinco estrellas
+              </legend>
+              <div className="flex justify-center gap-2">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <label
+                    key={star}
+                    className="cursor-pointer p-1 rounded-md hover:bg-ink-100 transition-colors"
+                    title={`${star} de 5`}
+                  >
+                    <input
+                      type="radio"
+                      name="calificacion"
+                      value={star}
+                      checked={rating === star}
+                      onChange={() => setRating(star)}
+                      className="sr-only peer"
+                    />
+                    <span className="sr-only">{star} de 5 estrellas</span>
+                    <MdStar
+                      aria-hidden="true"
+                      className={[
+                        'text-4xl transition-colors rounded-xs',
+                        star <= rating ? 'text-accent-400' : 'text-ink-300',
+                        'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500'
+                      ].join(' ')}
+                    />
+                  </label>
+                ))}
+              </div>
+              {rating > 0 && (
+                <p aria-live="polite" className="text-center text-sm text-ink-600 mt-3">
+                  Elegiste {rating} de 5
+                </p>
+              )}
+            </fieldset>
+
+            <Field label="Comentarios" hint="Opcional. Cuéntanos qué estuvo bien o qué se puede mejorar.">
+              {(p) => (
+                <textarea
+                  {...p}
+                  rows={3}
+                  value={evalComments}
+                  onChange={(e) => setEvalComments(e.target.value)}
+                />
+              )}
+            </Field>
+          </div>
+        )}
+      </Modal>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Asistente                                                           */}
+      {/* ------------------------------------------------------------------ */}
+      <Modal
+        open={activeModal === 'IA'}
+        onClose={() => setActiveModal(null)}
+        size="md"
+        icon={<MdSmartToy />}
+        title="Consultar dudas"
+        subtitle="Recomendaciones generales de salud y bienestar"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="rounded-md border border-ink-200 bg-white px-4 py-3 text-sm text-ink-600 measure">
+            Esto no reemplaza a tu médico. Si sientes algo urgente, llama a tu
+            profesional o acude al hospital.
+          </p>
+
+          <div
+            aria-live="polite"
+            className="min-h-40 rounded-md border border-ink-200 bg-white p-4"
+          >
+            {isLoadingAi ? (
+              <div className="space-y-2.5">
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-11/12" />
+                <Skeleton className="h-3.5 w-4/5" />
+              </div>
+            ) : aiResponse ? (
+              <p className="text-base text-ink-800 whitespace-pre-wrap leading-relaxed measure">
+                {aiResponse}
+              </p>
+            ) : (
+              <p className="text-sm text-ink-500">
+                Escribe tu pregunta abajo. Por ejemplo: «¿qué alimentos son buenos
+                para la hipertensión?».
+              </p>
+            )}
+          </div>
+
+          <form onSubmit={handleAskAI} className="flex flex-col sm:flex-row gap-3">
+            <Field label="Tu pregunta" className="flex-1">
+              {(p) => (
+                <input
+                  {...p}
+                  type="text"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Escribe tu consulta…"
+                />
+              )}
+            </Field>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              icon={<MdSend />}
+              loading={isLoadingAi}
+              className="sm:self-end sm:mb-0.5"
+            >
+              Consultar
+            </Button>
+          </form>
+        </div>
+      </Modal>
     </div>
   );
 }

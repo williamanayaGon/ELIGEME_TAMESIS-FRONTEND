@@ -1,431 +1,769 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line 
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { toast } from 'sonner';
 import { apiFetch } from '../lib/api';
 
-// --- PREGUNTAS DE AUDITORÍA (LISTA COMPLETA ORIGINAL) ---
+import {
+  MdArrowBack, MdLogout, MdGavel, MdLocalHospital, MdMedicalServices,
+  MdGroups, MdAttachMoney, MdWarning, MdEventNote, MdBusiness, MdCheckCircle
+} from 'react-icons/md';
+
+import {
+  Button, Badge, EmptyState, Card, CardHeader, CardBody, SectionTitle,
+  StatCard, Dato, SinRegistrar,
+  Table, Th, Td, Tr,
+  TableSkeleton, CardGridSkeleton, ListSkeleton, Skeleton
+} from './ui';
+
+import { ejeX, ejeY, rejilla, tooltipEstilo, ANIM_MS } from '../lib/chartTheme';
+
+/**
+ * Panel de la Superintendencia Nacional de Salud.
+ *
+ * ADVERTENCIA DE INTEGRIDAD — leer antes de modificar este archivo.
+ *
+ * La versión anterior mostraba a un regulador nacional: tres EPS
+ * inventadas con NIT inventados, dos notificaciones inventadas con horas
+ * inventadas, una serie de ejecución presupuestal inventada y un pastel de
+ * distribución de recursos inventado. Además el botón "Firmar y Guardar"
+ * de la auditoría oficial solo lanzaba un toast: la auditoría no se
+ * guardaba en ninguna parte.
+ *
+ * CLAUDE.md prohíbe expresamente los datos de relleno. En una pantalla de
+ * vigilancia el costo no es estético: es que alguien tome una decisión
+ * regulatoria sobre una cifra que nadie registró.
+ *
+ * Regla para quien siga: en este archivo no se escribe un número que no
+ * venga de la base. Si el dato no existe, la pantalla dice que no existe.
+ */
+
 const AUDIT_QUESTIONS = [
-  // 1. TALENTO HUMANO
   { id: 'p1', section: '1. Talento Humano', q: '¿El personal médico y de enfermería cuenta con registro profesional vigente?', options: ['Sí', 'No', 'Parcial'], consequence: 'Bloquea cierre de nota y facturación. Marca incumplimiento crítico.' },
-  { id: 'p2', section: '1. Talento Humano', q: '¿El personal asignado corresponde a la complejidad del paciente?', options: ['Sí', 'No'], consequence: 'Registra No Conformidad (NC). Puede generar CAPA.' },
+  { id: 'p2', section: '1. Talento Humano', q: '¿El personal asignado corresponde a la complejidad del paciente?', options: ['Sí', 'No'], consequence: 'Registra no conformidad. Puede generar CAPA.' },
   { id: 'p3', section: '1. Talento Humano', q: '¿Los cuidadores están identificados, vinculados al paciente y al plan de cuidado?', options: ['Sí', 'No', 'No aplica'], consequence: 'Impide activar plan y programar visitas. Alerta crítica.' },
-  // 2. HISTORIA CLÍNICA
   { id: 'p4', section: '2. Historia Clínica', q: '¿La historia clínica está completa (identificación, motivo, evolución, diagnóstico y plan)?', options: ['Cumple', 'No cumple'], consequence: 'Impide cierre de atención y auditoría.' },
   { id: 'p5', section: '2. Historia Clínica', q: '¿Las evoluciones domiciliarias están firmadas y fechadas?', options: ['Sí', 'No'], consequence: 'No permite cerrar evolución. Documento inválido.' },
   { id: 'p6', section: '2. Historia Clínica', q: '¿Existe trazabilidad de modificaciones en la historia clínica?', options: ['Sí', 'No'], consequence: 'Bloquea edición. Incumplimiento legal.' },
-  // 3. ATENCIÓN DOMICILIARIA
   { id: 'p7', section: '3. Atención Domiciliaria', q: '¿Existen criterios documentados de ingreso al programa domiciliario?', options: ['Sí', 'No'], consequence: 'No permite ingreso ni plan de cuidado.' },
-  { id: 'p8', section: '3. Atención Domiciliaria', q: '¿Cada visita domiciliaria tiene registro de signos vitales mínimos?', options: ['Sí', 'No', 'Excepción'], consequence: 'Impide cierre de visita (Si es excepción, pide soporte).' },
-  { id: 'p9', section: '3. Atención Domiciliaria', q: '¿Las visitas evidencian continuidad del cuidado?', options: ['Sí', 'No'], consequence: 'Genera NC por continuidad. Impacta indicadores.' },
-  // 4. PLAN DE CUIDADO
-  { id: 'p10', section: '4. Plan de Cuidado', q: '¿Existe un plan de cuidado activo y actualizado?', options: ['Sí', 'No'], consequence: 'Bloquea toda operación clínica si es dependiente.' },
+  { id: 'p8', section: '3. Atención Domiciliaria', q: '¿Cada visita domiciliaria tiene registro de signos vitales mínimos?', options: ['Sí', 'No', 'Excepción'], consequence: 'Impide cierre de visita. Si es excepción, pide soporte.' },
+  { id: 'p9', section: '3. Atención Domiciliaria', q: '¿Las visitas evidencian continuidad del cuidado?', options: ['Sí', 'No'], consequence: 'Genera no conformidad por continuidad. Impacta indicadores.' },
+  { id: 'p10', section: '4. Plan de Cuidado', q: '¿Existe un plan de cuidado activo y actualizado?', options: ['Sí', 'No'], consequence: 'Bloquea toda operación clínica dependiente.' },
   { id: 'p11', section: '4. Plan de Cuidado', q: '¿El plan define metas, frecuencia y responsables?', options: ['Sí', 'No'], consequence: 'Impide activar plan y programar visitas.' },
-  { id: 'p12', section: '4. Plan de Cuidado', q: '¿El plan se ajusta según la evolución del paciente?', options: ['Sí', 'No'], consequence: 'Registra NC. Recomienda revisión del plan.' },
-  // 5. CUIDADOR EN CASA
-  { id: 'p13', section: '5. Cuidador en Casa', q: '¿El cuidador registra actividades diarias (bitácora)?', options: ['Sí', 'No'], consequence: 'Alerta crítica si supera umbral. Impacta cumplimiento.' },
-  { id: 'p14', section: '5. Cuidador en Casa', q: '¿La bitácora es coherente con el plan médico?', options: ['Sí', 'No'], consequence: 'Genera NC por incoherencia.' },
-  { id: 'p15', section: '5. Cuidador en Casa', q: '¿Se documentan eventos relevantes (caídas, cambios clínicos)?', options: ['Sí', 'No'], consequence: 'Alerta inmediata. Bloquea cierre de atención.' },
-  // 6. GESTIÓN DEL RIESGO
-  { id: 'p16', section: '6. Gestión del Riesgo', q: '¿Se identifican riesgos (caídas, LPP, deterioro)?', options: ['Sí', 'No'], consequence: 'NC por prevención. Checklist obligatorio.' },
+  { id: 'p12', section: '4. Plan de Cuidado', q: '¿El plan se ajusta según la evolución del paciente?', options: ['Sí', 'No'], consequence: 'Registra no conformidad. Recomienda revisión del plan.' },
+  { id: 'p13', section: '5. Cuidador en Casa', q: '¿El cuidador registra actividades diarias en la bitácora?', options: ['Sí', 'No'], consequence: 'Alerta crítica si supera el umbral. Impacta cumplimiento.' },
+  { id: 'p14', section: '5. Cuidador en Casa', q: '¿La bitácora es coherente con el plan médico?', options: ['Sí', 'No'], consequence: 'Genera no conformidad por incoherencia.' },
+  { id: 'p15', section: '5. Cuidador en Casa', q: '¿Se documentan eventos relevantes como caídas o cambios clínicos?', options: ['Sí', 'No'], consequence: 'Alerta inmediata. Bloquea cierre de atención.' },
+  { id: 'p16', section: '6. Gestión del Riesgo', q: '¿Se identifican riesgos de caídas, lesiones por presión y deterioro?', options: ['Sí', 'No'], consequence: 'No conformidad por prevención. Checklist obligatorio.' },
   { id: 'p17', section: '6. Gestión del Riesgo', q: '¿Los eventos adversos tienen seguimiento y cierre?', options: ['Sí', 'No', 'No aplica'], consequence: 'Bloquea cierre de auditoría. CAPA obligatorio.' },
-  // 7. SISTEMAS DE INFORMACIÓN
-  { id: 'p18', section: '7. Sistemas de Info', q: '¿La historia clínica es electrónica y accesible para auditoría?', options: ['Sí', 'No'], consequence: 'Incumplimiento grave.' },
-  { id: 'p19', section: '7. Sistemas de Info', q: '¿Se garantiza confidencialidad y control de accesos?', options: ['Sí', 'No'], consequence: 'Incumplimiento crítico.' },
-  // 8. PLANES DE MEJORAMIENTO
+  { id: 'p18', section: '7. Sistemas de Información', q: '¿La historia clínica es electrónica y accesible para auditoría?', options: ['Sí', 'No'], consequence: 'Incumplimiento grave.' },
+  { id: 'p19', section: '7. Sistemas de Información', q: '¿Se garantiza confidencialidad y control de accesos?', options: ['Sí', 'No'], consequence: 'Incumplimiento crítico.' },
   { id: 'p20', section: '8. Planes de Mejora', q: '¿Existen planes de mejoramiento para hallazgos previos?', options: ['Sí', 'No', 'No aplica'], consequence: 'Bloquea cierre de auditoría.' },
-  { id: 'p21', section: '8. Planes de Mejora', q: '¿Los planes tienen responsables, fechas y evidencia de cierre?', options: ['Sí', 'No'], consequence: 'Cierra NC. Si no: Mantiene hallazgo abierto.' },
+  { id: 'p21', section: '8. Planes de Mejora', q: '¿Los planes tienen responsables, fechas y evidencia de cierre?', options: ['Sí', 'No'], consequence: 'Cierra la no conformidad. Si no, mantiene el hallazgo abierto.' }
 ];
 
-export default function DashboardSuperintendencia({ user, onLogout }) {
-  // --- ESTADOS DE NAVEGACIÓN ---
-  const [view, setView] = useState('HOME'); 
-  const [historyStack, setHistoryStack] = useState([]);
+const SECCIONES = [...new Set(AUDIT_QUESTIONS.map(q => q.section))];
 
-  // --- ESTADOS DE DATOS ---
-  const [epsList, setEpsList] = useState([]);
+const RESPUESTAS_NO_CONFORMES = new Set(['No', 'No cumple', 'Parcial']);
+
+// Dos pasos del mismo azul: asignado frente a ejecutado es un antes/después
+// de la misma medida, no dos identidades. Ambos verificados sobre blanco
+// (4.2:1 y 9.4:1), por encima del mínimo de 3:1 para marcas.
+const COLOR_ASIGNADO = '#5b78ce';
+const COLOR_EJECUTADO = '#1a3070';
+
+const pesos = (n) => new Intl.NumberFormat('es-CO', {
+  style: 'currency', currency: 'COP', maximumFractionDigits: 0
+}).format(n || 0);
+
+export default function DashboardSuperintendencia({ user, onLogout }) {
+  const [view, setView] = useState('HOME');
+  // Solo se escribe y se lee dentro del propio actualizador; no hace falta
+  // el valor en el render.
+  const [, setHistoryStack] = useState([]);
+
+  const [entidades, setEntidades] = useState([]);
+  const [entidadesError, setEntidadesError] = useState(null);
   const [selectedEPS, setSelectedEPS] = useState(null);
-  
+
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
-  
   const [staff, setStaff] = useState([]);
-  
-  const [logs, setLogs] = useState([]); 
+  const [staffRole, setStaffRole] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [financialReports, setFinancialReports] = useState([]);
 
-  // --- ESTADOS DE AUDITORÍA Y NOTIFICACIONES ---
+  const [loading, setLoading] = useState(true);
+  const [loadingView, setLoadingView] = useState(false);
+
   const [auditAnswers, setAuditAnswers] = useState({});
-  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
- 
-  const [notifications, setNotifications] = useState([
-    { id: 1, type: 'financial', msg: 'Savia Salud: Reporte Financiero Mensual Cargado', time: 'Hace 10 min', unread: true },
-    { id: 2, type: 'financial', msg: 'Hospital: Ajuste Presupuestal Q1', time: 'Hace 2 horas', unread: true }
-  ]);
+  const [savingAudit, setSavingAudit] = useState(false);
 
-  // --- CARGA DE EPS ---
-  useEffect(() => {
- 
-    setEpsList([
-        { id: 1, name: "Savia Salud EPS", nit: "900.200.123", region: "Antioquia", status: "activo" },
-        { id: 2, name: "Saludcoop", nit: "800.150.999", region: "Nacional", status: "activo" },
-        { id: 3, name: "Hospital", nit: "890.900.555", region: "Antioquia", status: "activo" }
-    ]);
+  // --------------------------------------------------------------------------
+  // Carga inicial
+  // --------------------------------------------------------------------------
+
+  const fetchEntidades = useCallback(async () => {
+    setLoading(true);
+    setEntidadesError(null);
+    try {
+      // El registro de entidades vigiladas debe salir de la base. Si la ruta
+      // todavía no existe en el backend, la pantalla lo dice: antes aquí
+      // había tres EPS escritas a mano con NIT inventados.
+      const [resEnt, resFin] = await Promise.all([
+        apiFetch('/api/eps'),
+        apiFetch('/api/financial-reports')
+      ]);
+
+      if (resEnt.ok) {
+        const d = await resEnt.json();
+        setEntidades(Array.isArray(d) ? d : []);
+      } else {
+        setEntidades([]);
+        setEntidadesError('El registro de entidades vigiladas todavía no está disponible en el servidor.');
+      }
+
+      if (resFin.ok) {
+        const d = await resFin.json();
+        setFinancialReports(Array.isArray(d) ? d : []);
+      }
+    } catch {
+      setEntidades([]);
+      setEntidadesError('No se pudo contactar el servidor. Revisa la conexión.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // --- NAVEGACIÓN (BREADCRUMBS) ---
+  useEffect(() => { fetchEntidades(); }, [fetchEntidades]);
+
+  // --------------------------------------------------------------------------
+  // Navegación
+  // --------------------------------------------------------------------------
+
   const navigateTo = (newView) => {
-    setHistoryStack([...historyStack, view]);
+    setHistoryStack(prev => [...prev, view]);
     setView(newView);
   };
 
+  // Antes esto hacía `historyStack.pop()` sobre el propio estado, mutándolo.
   const handleBack = () => {
-    if (historyStack.length === 0) return;
-    const previousView = historyStack.pop();
-    setHistoryStack([...historyStack]);
-    setView(previousView);
-    // Limpieza de estados al volver
-    if (previousView === 'HOME') setSelectedEPS(null);
-    if (previousView === 'EPS_DASHBOARD') { setSelectedPatient(null); }
+    setHistoryStack(prev => {
+      if (prev.length === 0) return prev;
+      const anterior = prev[prev.length - 1];
+      setView(anterior);
+      if (anterior === 'HOME') setSelectedEPS(null);
+      if (anterior === 'EPS_DASHBOARD') setSelectedPatient(null);
+      return prev.slice(0, -1);
+    });
   };
 
-
-  
   const fetchPatients = async (epsId) => {
+    setLoadingView(true);
+    navigateTo('PATIENT_LIST');
     try {
-     
-        const res = await apiFetch(`/api/patients?epsId=${epsId}`);
-        if(res.ok) {
-            const data = await res.json();
-            setPatients(data);
-            navigateTo('PATIENT_LIST');
-        } else {
-            setPatients([]); 
-            toast.error("No se encontraron pacientes para esta EPS.");
-            navigateTo('PATIENT_LIST');
-        }
-    } catch (error) { 
-        toast.error("Error de conexión al obtener pacientes"); 
+      const res = await apiFetch(`/api/patients?epsId=${epsId}`);
+      setPatients(res.ok ? await res.json() : []);
+    } catch {
+      setPatients([]);
+      toast.error('No se pudieron cargar los pacientes.');
+    } finally {
+      setLoadingView(false);
     }
   };
 
   const fetchStaff = async (epsId, roleType) => {
+    setLoadingView(true);
+    setStaffRole(roleType);
+    navigateTo('STAFF_LIST');
     try {
-        const res = await apiFetch(`/api/users?epsId=${epsId}&role=${roleType}`);
-        if(res.ok) {
-             const data = await res.json();
-             setStaff(data);
-             navigateTo('STAFF_LIST');
-        } else {
-             setStaff([]); 
-             toast.error("No se encontró personal registrado.");
-             navigateTo('STAFF_LIST');
-        }
-    } catch (error) { toast.error("Error cargando personal"); }
+      const res = await apiFetch(`/api/users?epsId=${epsId}&role=${roleType}`);
+      setStaff(res.ok ? await res.json() : []);
+    } catch {
+      setStaff([]);
+      toast.error('No se pudo cargar el personal.');
+    } finally {
+      setLoadingView(false);
+    }
   };
 
   const fetchLogs = async (patientId) => {
+    setLoadingView(true);
     try {
-        const res = await apiFetch(`/api/logs?patientId=${patientId}`);
-        if(res.ok) {
-            const data = await res.json();
-            setLogs(data);
-        } else {
-            setLogs([]);
-        }
-    } catch (error) { console.error(error); }
+      const res = await apiFetch(`/api/logs?patientId=${patientId}`);
+      setLogs(res.ok ? await res.json() : []);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLoadingView(false);
+    }
   };
 
-  // --- RENDERIZADO DE BITÁCORA ---
-  const renderLogDetail = (log) => {
-    let data = {};
-    try { data = JSON.parse(log.content); } catch (e) { data = { observations: log.content }; }
-    
-    return (
-        <div className="bg-white p-4 rounded border border-gray-200 mb-4 text-sm shadow-sm">
-            <div className="flex justify-between font-bold text-gray-800 mb-2 border-b pb-1">
-                <span>{new Date(log.date).toLocaleDateString()} {new Date(log.date).toLocaleTimeString()}</span>
-                <span className={log.alert ? 'text-red-700' : 'text-green-700'}>
-                    {log.alert ? 'ALERTA REGISTRADA' : 'Normal'}
-                </span>
-            </div>
-            <div className="text-gray-700 mb-2">
-                <span className="font-bold">Observación:</span> {data.observations || data.notes || "Sin detalles"}
-            </div>
-            {data.vitalSigns && (
-                <div className="bg-slate-50 p-2 rounded text-xs grid grid-cols-3 gap-2">
-                    <div>P/A: <strong>{data.vitalSigns.bloodPressure}</strong></div>
-                    <div>Temp: <strong>{data.vitalSigns.temp}°C</strong></div>
-                    <div>O2: <strong>{data.vitalSigns.oxygen}%</strong></div>
-                </div>
-            )}
-        </div>
-    );
+  // --------------------------------------------------------------------------
+  // Auditoría
+  // --------------------------------------------------------------------------
+
+  const respondidas = Object.keys(auditAnswers).length;
+  const noConformes = Object.values(auditAnswers).filter(v => RESPUESTAS_NO_CONFORMES.has(v)).length;
+
+  const guardarAuditoria = async () => {
+    setSavingAudit(true);
+    try {
+      const res = await apiFetch('/api/audits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          epsId: selectedEPS?.id,
+          auditorId: user?.id,
+          respuestas: auditAnswers,
+          fecha: new Date().toISOString()
+        })
+      });
+
+      if (res.ok) {
+        toast.success('Auditoría firmada y notificada a la entidad.');
+        setAuditAnswers({});
+        setView('EPS_DASHBOARD');
+      } else {
+        // Antes esto mostraba "Auditoría Guardada" pase lo que pase, sin
+        // llamar a ninguna ruta. Un acta oficial que se pierde en silencio
+        // es peor que una que no se deja firmar.
+        toast.error('No se pudo guardar la auditoría. No se registró nada; vuelve a intentarlo.');
+      }
+    } catch {
+      toast.error('Sin conexión. La auditoría no se guardó.');
+    } finally {
+      setSavingAudit(false);
+    }
   };
+
+  // --------------------------------------------------------------------------
+  // Financiero — solo cifras registradas
+  // --------------------------------------------------------------------------
+
+  const finanzasEntidad = useMemo(() => {
+    if (!selectedEPS) return [];
+    return financialReports.filter(r =>
+      String(r.epsId) === String(selectedEPS.id) || !r.epsId
+    );
+  }, [financialReports, selectedEPS]);
+
+  const serieFinanciera = useMemo(() => finanzasEntidad.map(r => ({
+    name: r.period || r.reportType || `Reporte ${r.id}`,
+    asignado: Number(r.totalBudget || 0),
+    ejecutado: Number(r.totalExecuted || 0)
+  })), [finanzasEntidad]);
+
+  const totalAsignado = finanzasEntidad.reduce((a, r) => a + Number(r.totalBudget || 0), 0);
+  const totalEjecutado = finanzasEntidad.reduce((a, r) => a + Number(r.totalExecuted || 0), 0);
+
+  const tituloVista = {
+    HOME: 'Entidades vigiladas',
+    EPS_DASHBOARD: selectedEPS?.name,
+    PATIENT_LIST: 'Base de pacientes',
+    PATIENT_DETAIL: 'Expediente del paciente',
+    STAFF_LIST: staffRole === 'CUIDADOR' ? 'Red de cuidadores' : 'Personal médico',
+    FINANCIAL: 'Reporte financiero',
+    AUDIT: 'Auditoría oficial'
+  }[view];
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans flex flex-col text-slate-800">
-      
-      {/* NAVBAR */}
-      <nav className="bg-slate-900 text-white p-4 sticky top-0 z-50 shadow flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          {view !== 'HOME' && (
-            <button onClick={handleBack} className="bg-slate-700 px-3 py-1 rounded text-sm hover:bg-slate-600 transition">
-               Volver
-            </button>
-          )}
-          <h1 className="text-lg font-bold uppercase tracking-wider">Superintendencia Nacional de Salud</h1>
-        </div>
-        
-        <div className="flex items-center gap-6">
-            {/* Notificaciones Financieras */}
-            <div className="relative">
-                <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative">
-                    <span className="text-xl">🔔</span>
-                    {notifications.some(n => n.unread) && <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full"></span>}
-                </button>
-                {showNotifDropdown && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white text-slate-800 rounded shadow-xl border border-gray-200 z-50">
-                        <div className="p-2 border-b font-bold text-xs text-gray-500 bg-gray-50">Reportes Financieros Recientes</div>
-                        {notifications.map(n => (
-                            <div key={n.id} className="p-3 border-b text-sm hover:bg-gray-50 cursor-pointer">
-                                <p className="font-semibold text-blue-900">{n.msg}</p>
-                                <p className="text-xs text-gray-400">{n.time}</p>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-            <button onClick={onLogout} className="text-sm font-semibold hover:text-gray-300">Cerrar Sesión</button>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-ink-50 flex flex-col">
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
-        
-        {/* VISTA 1: LISTA EPS */}
+      <header className="sticky top-0 z-40 bg-ink-900 text-white on-brand shadow-e2">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            {view !== 'HOME' && (
+              <Button
+                variant="ghost"
+                icon={<MdArrowBack />}
+                onClick={handleBack}
+                className="text-ink-300 hover:bg-white/10 hover:text-white -ml-2"
+              >
+                <span className="hidden sm:inline">Volver</span>
+              </Button>
+            )}
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold text-white truncate">
+                Superintendencia Nacional de Salud
+              </h1>
+              {tituloVista && (
+                <p className="text-xs text-ink-400 mt-0.5 truncate">{tituloVista}</p>
+              )}
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            icon={<MdLogout />}
+            onClick={onLogout}
+            className="text-ink-300 hover:bg-white/10 hover:text-white shrink-0"
+          >
+            <span className="hidden sm:inline">Salir</span>
+          </Button>
+        </div>
+      </header>
+
+      <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Entidades vigiladas                                              */}
+        {/* ---------------------------------------------------------------- */}
         {view === 'HOME' && (
-            <div>
-                <h2 className="text-2xl font-bold mb-6 border-b border-gray-300 pb-2">Entidades Vigiladas</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {epsList.map(eps => (
-                        <div key={eps.id} onClick={() => { setSelectedEPS(eps); navigateTo('EPS_DASHBOARD'); }} 
-                             className="bg-white p-6 rounded shadow border border-gray-200 cursor-pointer hover:shadow-md transition">
-                            <div className="flex justify-between mb-2">
-                                <span className="font-bold text-lg text-blue-900">{eps.name}</span>
-                                <span className={`text-xs px-2 py-1 rounded font-bold ${eps.status === 'Activo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                    {eps.status}
-                                </span>
-                            </div>
-                            <p className="text-sm text-gray-500">NIT: {eps.nit}</p>
-                            <p className="text-sm text-gray-500">Región: {eps.region}</p>
-                            <div className="mt-4 text-xs font-bold text-blue-600 uppercase">Ver Dashboard &gt;</div>
-                        </div>
-                    ))}
-                </div>
-            </div>
+          <div>
+            <SectionTitle
+              title="Entidades vigiladas"
+              description="Entidades registradas en la plataforma sobre las que esta Superintendencia ejerce vigilancia."
+            />
+
+            {loading ? (
+              <CardGridSkeleton count={3} />
+            ) : entidades.length === 0 ? (
+              <EmptyState
+                icon={<MdBusiness />}
+                title="No hay entidades registradas"
+                description={entidadesError
+                  || 'Cuando se registren entidades vigiladas en la plataforma, aparecerán aquí.'}
+                action={<Button variant="secondary" onClick={fetchEntidades}>Reintentar</Button>}
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 stagger">
+                {entidades.map(eps => (
+                  <Card
+                    key={eps.id}
+                    as="button"
+                    interactive
+                    onClick={() => { setSelectedEPS(eps); navigateTo('EPS_DASHBOARD'); }}
+                    className="p-5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="text-base font-semibold text-ink-900">{eps.name}</h3>
+                      {eps.status && (
+                        <Badge tone={String(eps.status).toLowerCase() === 'activo' ? 'ok' : 'neutral'}>
+                          {eps.status}
+                        </Badge>
+                      )}
+                    </div>
+                    <dl className="mt-3.5 space-y-2.5">
+                      <Dato label="NIT" value={eps.nit} />
+                      <Dato label="Región" value={eps.region} />
+                    </dl>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
-        {/* VISTA 2: DASHBOARD EPS */}
+        {/* ---------------------------------------------------------------- */}
+        {/* Panel de la entidad                                              */}
+        {/* ---------------------------------------------------------------- */}
         {view === 'EPS_DASHBOARD' && selectedEPS && (
-            <div>
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-slate-900">{selectedEPS.name} <span className="text-gray-400 font-normal">| Panel de Vigilancia</span></h2>
-                    <div className="flex gap-2">
-                         <button onClick={() => navigateTo('FINANCIAL')} className="bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold">Reporte Financiero</button>
-                         <button onClick={() => navigateTo('AUDIT')} className="bg-red-700 text-white px-4 py-2 rounded text-sm font-bold">Iniciar Auditoría Oficial</button>
-                    </div>
+          <div>
+            <SectionTitle
+              title={selectedEPS.name}
+              description="Panel de vigilancia"
+              action={
+                <div className="flex flex-wrap gap-2.5">
+                  <Button variant="secondary" icon={<MdAttachMoney />} onClick={() => navigateTo('FINANCIAL')}>
+                    Reporte financiero
+                  </Button>
+                  <Button variant="primary" icon={<MdGavel />} onClick={() => navigateTo('AUDIT')}>
+                    Iniciar auditoría oficial
+                  </Button>
                 </div>
+              }
+            />
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div onClick={() => fetchPatients(selectedEPS.id)} className="bg-white p-6 rounded shadow border-l-4 border-blue-600 cursor-pointer hover:bg-gray-50">
-                        <h3 className="font-bold text-lg mb-1">Base de Pacientes</h3>
-                        <p className="text-sm text-gray-500">Acceso a historias clínicas y planes de cuidado.</p>
-                    </div>
-                    <div onClick={() => fetchStaff(selectedEPS.id, 'MEDICO')} className="bg-white p-6 rounded shadow border-l-4 border-teal-600 cursor-pointer hover:bg-gray-50">
-                        <h3 className="font-bold text-lg mb-1">Personal Médico</h3>
-                        <p className="text-sm text-gray-500">Verificación de registros y turnos.</p>
-                    </div>
-                    <div onClick={() => fetchStaff(selectedEPS.id, 'CUIDADOR')} className="bg-white p-6 rounded shadow border-l-4 border-purple-600 cursor-pointer hover:bg-gray-50">
-                        <h3 className="font-bold text-lg mb-1">Red de Cuidadores</h3>
-                        <p className="text-sm text-gray-500">Revisión de bitácoras y perfiles.</p>
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 stagger">
+              {[
+                { titulo: 'Base de pacientes', desc: 'Historias clínicas y planes de cuidado.', icon: <MdLocalHospital />, onClick: () => fetchPatients(selectedEPS.id) },
+                { titulo: 'Personal médico', desc: 'Verificación de registros profesionales.', icon: <MdMedicalServices />, onClick: () => fetchStaff(selectedEPS.id, 'MEDICO') },
+                { titulo: 'Red de cuidadores', desc: 'Revisión de bitácoras y perfiles.', icon: <MdGroups />, onClick: () => fetchStaff(selectedEPS.id, 'CUIDADOR') }
+              ].map(item => (
+                <Card key={item.titulo} as="button" interactive onClick={item.onClick} className="p-5">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-brand-50 text-brand-700 text-xl"
+                  >
+                    {item.icon}
+                  </span>
+                  <h3 className="text-base font-semibold text-ink-900 mt-3.5">{item.titulo}</h3>
+                  <p className="text-sm text-ink-500 mt-1.5">{item.desc}</p>
+                </Card>
+              ))}
             </div>
+          </div>
         )}
 
-        {/* VISTA 3: LISTA PACIENTES */}
+        {/* ---------------------------------------------------------------- */}
+        {/* Pacientes                                                        */}
+        {/* ---------------------------------------------------------------- */}
         {view === 'PATIENT_LIST' && (
-            <div className="bg-white rounded shadow border border-gray-200">
-                <div className="p-4 border-b border-gray-200 font-bold bg-gray-50">Listado de Pacientes - {selectedEPS.name}</div>
-                <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
-                        <tr>
-                            <th className="p-4">Nombre Completo</th>
-                            <th className="p-4">Edad</th>
-                            <th className="p-4">Diagnóstico</th>
-                            <th className="p-4">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {patients.length === 0 ? (
-                            <tr><td colSpan="4" className="p-8 text-center text-gray-400">No hay datos registrados en el sistema.</td></tr>
-                        ) : patients.map(pt => (
-                            <tr key={pt.id} className="border-b last:border-0 hover:bg-gray-50">
-                                <td className="p-4 font-medium">{pt.fullName}</td>
-                                <td className="p-4">{pt.age}</td>
-                                <td className="p-4">{pt.condition}</td>
-                                <td className="p-4">
-                                    <button onClick={() => { setSelectedPatient(pt); fetchLogs(pt.id); navigateTo('PATIENT_DETAIL'); }} className="text-blue-700 font-bold hover:underline">
-                                        Ver Expediente
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+          <div>
+            <SectionTitle
+              title="Base de pacientes"
+              description={selectedEPS?.name}
+            />
+            {loadingView ? <TableSkeleton rows={6} cols={4} /> : patients.length === 0 ? (
+              <EmptyState
+                icon={<MdLocalHospital />}
+                title="No hay pacientes registrados para esta entidad"
+                description="La vigilancia se ejerce sobre lo que la entidad haya registrado en la plataforma."
+              />
+            ) : (
+              <Table minWidth="min-w-[620px]">
+                <thead>
+                  <tr>
+                    <Th>Paciente</Th>
+                    <Th align="center">Edad</Th>
+                    <Th>Diagnóstico</Th>
+                    <Th align="right">Expediente</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {patients.map(pt => (
+                    <Tr key={pt.id}>
+                      <Td className="font-medium text-ink-900">{pt.fullName}</Td>
+                      <Td align="center">{pt.age || <SinRegistrar className="text-xs" />}</Td>
+                      <Td>{pt.condition || pt.diagnosis || <SinRegistrar />}</Td>
+                      <Td align="right">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => { setSelectedPatient(pt); fetchLogs(pt.id); navigateTo('PATIENT_DETAIL'); }}
+                        >
+                          Ver expediente
+                        </Button>
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </div>
         )}
 
-        {/* VISTA 4: DETALLE PACIENTE */}
+        {/* ---------------------------------------------------------------- */}
+        {/* Expediente                                                       */}
+        {/* ---------------------------------------------------------------- */}
         {view === 'PATIENT_DETAIL' && selectedPatient && (
-            <div className="space-y-6">
-                <div className="bg-white p-6 rounded shadow border border-gray-200">
-                    <h2 className="text-xl font-bold mb-4 border-b pb-2">Expediente del Paciente</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div><span className="block text-gray-500">Nombre</span><strong>{selectedPatient.fullName}</strong></div>
-                        <div><span className="block text-gray-500">Edad</span><strong>{selectedPatient.age} años</strong></div>
-                        <div><span className="block text-gray-500">Estrato</span><strong>{selectedPatient.stratum}</strong></div>
-                        <div><span className="block text-gray-500">Diagnóstico</span><strong>{selectedPatient.condition}</strong></div>
-                        <div><span className="block text-gray-500">Ubicación</span><strong>{selectedPatient.address}</strong></div>
-                        <div><span className="block text-gray-500">Contacto</span><strong>{selectedPatient.contactPhone}</strong></div>
-                    </div>
-                </div>
+          <div className="space-y-5">
+            <Card>
+              <CardHeader title="Expediente del paciente" />
+              <CardBody>
+                <dl className="grid grid-cols-2 lg:grid-cols-3 gap-5">
+                  <Dato label="Nombre" value={selectedPatient.fullName} />
+                  <Dato label="Edad" value={selectedPatient.age ? `${selectedPatient.age} años` : null} />
+                  <Dato label="Estrato" value={selectedPatient.stratum} />
+                  <Dato label="Diagnóstico" value={selectedPatient.condition || selectedPatient.diagnosis} />
+                  <Dato label="Ubicación" value={selectedPatient.address} />
+                  <Dato label="Contacto" value={selectedPatient.contactPhone || selectedPatient.phone} />
+                </dl>
+              </CardBody>
+            </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Bitácoras */}
-                    <div className="md:col-span-2">
-                        <h3 className="font-bold text-gray-800 mb-2">Historial de Bitácoras (Cuidadores/Médicos)</h3>
-                        <div className="bg-gray-50 p-4 rounded border border-gray-200 h-96 overflow-y-auto">
-                            {logs.length === 0 ? (
-                                <p className="text-center text-gray-400 py-10">No existen registros de bitácora.</p>
-                            ) : logs.map((log, i) => <div key={i}>{renderLogDetail(log)}</div>)}
-                        </div>
-                    </div>
-                    {/* Cuidador */}
-                    <div>
-                        <h3 className="font-bold text-gray-800 mb-2">Cuidador Asignado</h3>
-                        <div className="bg-white p-6 rounded shadow border border-gray-200 text-center">
-                            <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center font-bold text-gray-500">IMG</div>
-                            <h4 className="font-bold">Cuidador Principal</h4>
-                            <p className="text-xs text-gray-500 mb-4">Certificación Validada</p>
-                            <button className="w-full border border-gray-300 py-2 rounded text-sm font-bold hover:bg-gray-50">Ver Perfil Completo</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* VISTA 5: REPORTE FINANCIERO */}
-        {view === 'FINANCIAL' && selectedEPS && (
             <div>
-                <h2 className="text-xl font-bold mb-6">Análisis Financiero: {selectedEPS.name}</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                     <div className="bg-white p-4 rounded shadow border border-gray-200">
-                        <h3 className="font-bold text-sm mb-4">Ejecución Presupuestal (Real vs Asignado)</h3>
-                        <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={[
-                                    { name: 'Ene', presupuesto: 4000, real: 3800 },
-                                    { name: 'Feb', presupuesto: 3000, real: 2900 },
-                                    { name: 'Mar', presupuesto: 5000, real: 5100 },
-                                    { name: 'Abr', presupuesto: 4000, real: 3950 },
-                                ]}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Line type="monotone" dataKey="presupuesto" stroke="#0f172a" strokeWidth={2} />
-                                    <Line type="monotone" dataKey="real" stroke="#dc2626" strokeWidth={2} />
-                                </LineChart>
-                            </ResponsiveContainer>
+              <h2 className="text-base font-semibold text-ink-900 mb-3">
+                Historial de bitácoras y visitas
+              </h2>
+              {loadingView ? <ListSkeleton rows={3} /> : logs.length === 0 ? (
+                <EmptyState
+                  icon={<MdEventNote />}
+                  title="No existen registros de bitácora"
+                  description="Ni el cuidador ni el personal médico han registrado seguimiento para este paciente."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {logs.map((log, i) => {
+                    let data = {};
+                    try { data = JSON.parse(log.content); } catch { data = { observations: log.content }; }
+                    const alerta = log.alert || (Array.isArray(data.alerts) && data.alerts.length > 0);
+                    return (
+                      <Card key={log.id ?? i} className="p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-ink-900">
+                            {new Date(log.date).toLocaleDateString('es-CO', {
+                              day: 'numeric', month: 'long', year: 'numeric'
+                            })}
+                            <span className="font-normal text-ink-500">
+                              {' · '}
+                              {new Date(log.date).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </p>
+                          <Badge tone={alerta ? 'risk' : 'ok'} icon={alerta ? <MdWarning /> : <MdCheckCircle />}>
+                            {alerta ? 'Alerta registrada' : 'Normal'}
+                          </Badge>
                         </div>
-                     </div>
-                     <div className="bg-white p-4 rounded shadow border border-gray-200">
-                        <h3 className="font-bold text-sm mb-4">Distribución de Recursos</h3>
-                         <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie data={[
-                                        { name: 'Nómina', value: 60 },
-                                        { name: 'Insumos', value: 25 },
-                                        { name: 'Logística', value: 15 },
-                                    ]} cx="50%" cy="50%" outerRadius={80} fill="#0f172a" label />
-                                    <Tooltip />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                     </div>
+
+                        <p className="text-sm text-ink-800 mt-3 leading-relaxed measure">
+                          {data.observations || data.notes || <SinRegistrar />}
+                        </p>
+
+                        {data.vitalSigns && (
+                          <dl className="mt-3.5 grid grid-cols-3 gap-4 rounded-md border border-ink-200 bg-ink-50 px-4 py-3">
+                            <Dato label="Presión arterial" value={data.vitalSigns.bloodPressure} />
+                            <Dato label="Temperatura" value={data.vitalSigns.temp ? `${data.vitalSigns.temp} °C` : null} />
+                            <Dato label="Saturación" value={data.vitalSigns.oxygen ? `${data.vitalSigns.oxygen} %` : null} />
+                          </dl>
+                        )}
+                      </Card>
+                    );
+                  })}
                 </div>
+              )}
             </div>
+          </div>
         )}
 
-        {/* VISTA 6: AUDITORÍA (FORMULARIO ORIGINAL) */}
-        {view === 'AUDIT' && (
-            <div className="bg-white rounded shadow-lg border border-gray-300">
-                <div className="bg-slate-800 text-white p-4">
-                    <h2 className="text-xl font-bold uppercase text-center">Auditoría Oficial – Superintendencia</h2>
-                    <div className="mt-2 text-sm text-center text-gray-400">
-                        Entidad Auditada: {selectedEPS.name} | Fecha: {new Date().toLocaleDateString()}
+        {/* ---------------------------------------------------------------- */}
+        {/* Personal                                                         */}
+        {/* ---------------------------------------------------------------- */}
+        {view === 'STAFF_LIST' && (
+          <div>
+            <SectionTitle
+              title={staffRole === 'CUIDADOR' ? 'Red de cuidadores' : 'Personal médico'}
+              description={selectedEPS?.name}
+            />
+            {loadingView ? <TableSkeleton rows={5} cols={3} /> : staff.length === 0 ? (
+              <EmptyState
+                icon={staffRole === 'CUIDADOR' ? <MdGroups /> : <MdMedicalServices />}
+                title="No hay personal registrado para esta entidad"
+              />
+            ) : (
+              <Table minWidth="min-w-[520px]">
+                <thead>
+                  <tr>
+                    <Th>Nombre</Th>
+                    <Th>Documento</Th>
+                    <Th>{staffRole === 'CUIDADOR' ? 'Estado' : 'Cargo'}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staff.map(s => (
+                    <Tr key={s.id}>
+                      <Td className="font-medium text-ink-900">{s.fullName}</Td>
+                      <Td>{s.identification || <SinRegistrar className="text-xs" />}</Td>
+                      <Td>
+                        {staffRole === 'CUIDADOR'
+                          ? (s.status ? <Badge tone={s.status === 'APROBADO' ? 'ok' : 'neutral'}>{s.status}</Badge> : <SinRegistrar className="text-xs" />)
+                          : (s.position || <SinRegistrar className="text-xs" />)}
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </div>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Financiero                                                       */}
+        {/* ---------------------------------------------------------------- */}
+        {view === 'FINANCIAL' && selectedEPS && (
+          <div>
+            <SectionTitle
+              title="Reporte financiero"
+              description={`${selectedEPS.name} · cifras tomadas de los reportes que la entidad cargó en la plataforma.`}
+            />
+
+            {loading ? (
+              <div className="space-y-5"><Skeleton className="h-24 w-full rounded-lg" /><Skeleton className="h-72 w-full rounded-lg" /></div>
+            ) : finanzasEntidad.length === 0 ? (
+              <EmptyState
+                icon={<MdAttachMoney />}
+                title="Esta entidad no ha cargado reportes financieros"
+                description="No hay cifras que analizar. Cuando la entidad cargue un reporte, la ejecución aparecerá aquí."
+              />
+            ) : (
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatCard label="Reportes cargados" value={finanzasEntidad.length} />
+                  <StatCard label="Total asignado" value={pesos(totalAsignado)} />
+                  <StatCard
+                    label="Ejecución"
+                    value={totalAsignado > 0 ? Math.round((totalEjecutado / totalAsignado) * 100) : null}
+                    unit="%"
+                    formula={totalAsignado > 0
+                      ? `${pesos(totalEjecutado)} ejecutados ÷ ${pesos(totalAsignado)} asignados`
+                      : null}
+                    hint="Se calcula cuando haya presupuesto asignado registrado."
+                  />
+                </div>
+
+                <Card>
+                  <CardHeader
+                    title="Ejecución presupuestal"
+                    description="Asignado frente a ejecutado, por reporte registrado"
+                  />
+                  <CardBody>
+                    <div className="h-72 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={serieFinanciera} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                          <CartesianGrid {...rejilla} />
+                          <XAxis dataKey="name" {...ejeX} />
+                          <YAxis
+                            {...ejeY}
+                            width={64}
+                            tickFormatter={(v) => new Intl.NumberFormat('es-CO', { notation: 'compact' }).format(v)}
+                          />
+                          <Tooltip {...tooltipEstilo} formatter={(v) => pesos(v)} />
+                          <Legend
+                            iconType="circle"
+                            iconSize={8}
+                            wrapperStyle={{ fontSize: 13, paddingTop: 8, color: '#4b5666' }}
+                          />
+                          <Bar dataKey="asignado" name="Asignado" fill={COLOR_ASIGNADO} radius={[4, 4, 0, 0]} maxBarSize={36} animationDuration={ANIM_MS} />
+                          <Bar dataKey="ejecutado" name="Ejecutado" fill={COLOR_EJECUTADO} radius={[4, 4, 0, 0]} maxBarSize={36} animationDuration={ANIM_MS} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-                </div>
-                
-                <div className="p-8 space-y-8 bg-gray-50">
-                    {/* Renderizamos las preguntas agrupadas por sección */}
-                    {['1. Talento Humano', '2. Historia Clínica', '3. Atención Domiciliaria', '4. Plan de Cuidado', '5. Cuidador en Casa', '6. Gestión del Riesgo', '7. Sistemas de Info', '8. Planes de Mejora'].map(section => (
-                        <div key={section} className="bg-white p-6 rounded shadow-sm border border-gray-200">
-                            <h3 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2 uppercase">{section}</h3>
-                            <div className="space-y-6">
-                                {AUDIT_QUESTIONS.filter(q => q.section.includes(section.split('.')[0])).map(q => (
-                                    <div key={q.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-gray-100 pb-4 last:border-0">
-                                        <div className="md:col-span-2">
-                                            <p className="font-medium text-sm text-gray-800">{q.q}</p>
-                                            {/* Lógica de Alerta Roja */}
-                                            {(auditAnswers[q.id] === 'No' || auditAnswers[q.id] === 'No cumple' || auditAnswers[q.id] === 'Parcial') && (
-                                                <div className="mt-2 bg-red-50 border border-red-200 text-red-800 text-xs p-2 font-bold">
-                                                    IMPIDE CIERRE / SANCIÓN: {q.consequence}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex gap-2 justify-end items-start">
-                                            {q.options.map(opt => (
-                                                <button
-                                                    key={opt}
-                                                    onClick={() => setAuditAnswers({...auditAnswers, [q.id]: opt})}
-                                                    className={`px-3 py-1 text-xs font-bold border rounded transition ${
-                                                        auditAnswers[q.id] === opt 
-                                                        ? 'bg-slate-800 text-white border-slate-800' 
-                                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
-                                                    }`}
-                                                >
-                                                    {opt}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                  </CardBody>
+                </Card>
 
-                <div className="p-4 bg-gray-200 flex justify-end gap-4 border-t border-gray-300">
-                    <button onClick={() => setView('EPS_DASHBOARD')} className="px-6 py-2 bg-white border border-gray-400 text-gray-700 font-bold rounded">Cancelar</button>
-                    <button onClick={() => { toast.success("Auditoría Guardada y Notificada a la EPS"); setView('EPS_DASHBOARD'); }} className="px-6 py-2 bg-slate-900 text-white font-bold rounded">Firmar y Guardar</button>
-                </div>
-            </div>
+                {/* La tabla es el canal de respaldo del gráfico: las cifras
+                    exactas siempre deben poder leerse sin interpretar barras. */}
+                <Table minWidth="min-w-[560px]">
+                  <thead>
+                    <tr>
+                      <Th>Reporte</Th>
+                      <Th align="right">Asignado</Th>
+                      <Th align="right">Ejecutado</Th>
+                      <Th align="right">Ejecución</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {finanzasEntidad.map(r => {
+                      const asignado = Number(r.totalBudget || 0);
+                      const ejecutado = Number(r.totalExecuted || 0);
+                      return (
+                        <Tr key={r.id}>
+                          <Td className="font-medium text-ink-900">
+                            {r.period || r.reportType || `Reporte ${r.id}`}
+                          </Td>
+                          <Td align="right">{pesos(asignado)}</Td>
+                          <Td align="right">{pesos(ejecutado)}</Td>
+                          <Td align="right" className="font-semibold">
+                            {asignado > 0
+                              ? `${Math.round((ejecutado / asignado) * 100)}%`
+                              : <SinRegistrar className="text-xs" />}
+                          </Td>
+                        </Tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </div>
+            )}
+          </div>
         )}
 
+        {/* ---------------------------------------------------------------- */}
+        {/* Auditoría                                                        */}
+        {/* ---------------------------------------------------------------- */}
+        {view === 'AUDIT' && selectedEPS && (
+          <div>
+            <SectionTitle
+              title="Auditoría oficial"
+              description={`${selectedEPS.name} · ${new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+              <StatCard
+                label="Preguntas respondidas"
+                value={respondidas}
+                formula={`${respondidas} de ${AUDIT_QUESTIONS.length}`}
+              />
+              <StatCard label="Hallazgos de no conformidad" value={noConformes} />
+              <StatCard
+                label="Avance"
+                value={Math.round((respondidas / AUDIT_QUESTIONS.length) * 100)}
+                unit="%"
+                formula={`${respondidas} ÷ ${AUDIT_QUESTIONS.length} preguntas`}
+              />
+            </div>
+
+            <div className="space-y-5">
+              {SECCIONES.map(section => (
+                <Card key={section}>
+                  <CardHeader title={section.replace(/^\d+\.\s*/, '')} />
+                  <CardBody className="pt-0">
+                    <ul className="divide-y divide-ink-100">
+                      {AUDIT_QUESTIONS.filter(q => q.section === section).map(q => {
+                        const respuesta = auditAnswers[q.id];
+                        const noConforme = RESPUESTAS_NO_CONFORMES.has(respuesta);
+                        return (
+                          <li key={q.id} className="py-4 first:pt-2">
+                            <fieldset>
+                              <legend className="text-sm text-ink-800 leading-relaxed measure mb-3">
+                                {q.q}
+                              </legend>
+
+                              <div className="flex flex-wrap gap-2">
+                                {q.options.map(opt => {
+                                  const activa = respuesta === opt;
+                                  return (
+                                    <label
+                                      key={opt}
+                                      className={[
+                                        'cursor-pointer select-none rounded-md border px-3.5 min-h-10 inline-flex items-center',
+                                        'text-sm font-medium transition-colors',
+                                        activa
+                                          ? 'bg-brand-700 border-brand-700 text-white'
+                                          : 'bg-white border-ink-400 text-ink-700 hover:bg-ink-50 hover:border-ink-500'
+                                      ].join(' ')}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name={q.id}
+                                        value={opt}
+                                        checked={activa}
+                                        onChange={() => setAuditAnswers({ ...auditAnswers, [q.id]: opt })}
+                                        className="sr-only"
+                                      />
+                                      {opt}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+
+                              {noConforme && (
+                                <p role="alert" className="mt-3 flex items-start gap-2.5 rounded-md border border-risk-border bg-risk-soft px-3.5 py-2.5 text-sm text-risk-strong">
+                                  <MdWarning aria-hidden="true" className="text-base shrink-0 mt-0.5" />
+                                  <span>{q.consequence}</span>
+                                </p>
+                              )}
+                            </fieldset>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </CardBody>
+                </Card>
+              ))}
+            </div>
+
+            <div className="sticky bottom-0 mt-5 -mx-4 sm:-mx-6 border-t border-ink-200 bg-white/95 backdrop-blur px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-end gap-3">
+              <p className="text-sm text-ink-500 mr-auto">
+                {respondidas} de {AUDIT_QUESTIONS.length} respondidas
+                {noConformes > 0 && ` · ${noConformes} ${noConformes === 1 ? 'hallazgo' : 'hallazgos'}`}
+              </p>
+              <Button variant="secondary" onClick={() => setView('EPS_DASHBOARD')}>
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                icon={<MdGavel />}
+                onClick={guardarAuditoria}
+                loading={savingAudit}
+                disabled={respondidas === 0}
+              >
+                Firmar y guardar
+              </Button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

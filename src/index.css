@@ -1,143 +1,341 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* ==========================================================================
+   ELÍGEME — Sistema de diseño
+   Plataforma de cuidado domiciliario · Alcaldía de Támesis (Antioquia)
+
+   Institucional pero moderno. Una sola familia cromática anclada en el azul
+   de la marca; el color solo aparece cuando significa algo.
+
+   Escena de uso que manda: cuidador o profesional con un teléfono Android de
+   gama media, a la intemperie, con señal intermitente. De ahí salen tres
+   decisiones que no son negociables:
+     · contraste alto de verdad (todos los pares de texto verificados ≥4.5:1)
+     · objetivos táctiles de 44px
+     · cero tipografías web (el ancho de banda es accesibilidad aquí)
+   ========================================================================== */
+
 @custom-variant dark (&:is(.dark *));
+
 html, body, #root {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
-}
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  min-height: 100%;
 }
 
-.animate-fade-in-up {
-  animation: fade-in-up 0.3s ease-out forwards;
+@theme {
+  /* ---------------------------------------------------------------------
+     Color · Azul institucional
+     El 700 es el azul de la marca tal como ya vive en el código (#1f3c88).
+     La rampa se construyó alrededor de ese ancla, no al revés.
+     --------------------------------------------------------------------- */
+  --color-brand-50:  #eef2fb;
+  --color-brand-100: #dae2f6;
+  --color-brand-200: #b8c7ed;
+  --color-brand-300: #8ba3e0;
+  --color-brand-400: #5b78ce;
+  --color-brand-500: #3a55b0;
+  --color-brand-600: #2a4396;
+  --color-brand-700: #1f3c88;
+  --color-brand-800: #1a3070;
+  --color-brand-900: #15264f;
+  --color-brand-950: #0d1730;
+
+  /* ---------------------------------------------------------------------
+     Color · Amarillo ELÍGEME
+     Es el color de la abeja y del acento histórico. Nunca como texto sobre
+     blanco: siempre como superficie con tinta oscura encima, o como filete.
+     --------------------------------------------------------------------- */
+  --color-accent-50:  #fdf8e7;
+  --color-accent-100: #faedc2;
+  --color-accent-200: #f5db85;
+  --color-accent-300: #f0c74a;
+  --color-accent-400: #ecb51f;
+  --color-accent-500: #d99e0b;
+  --color-accent-600: #b47c08;
+  --color-accent-700: #8a5a00;
+  --color-accent-800: #6b4600;
+  --color-accent-900: #4a3000;
+
+  /* ---------------------------------------------------------------------
+     Color · Tinta (neutros fríos, para que asienten con el azul)
+
+     Tres escalones con trabajos distintos y verificados:
+       ink-200/300 · separadores y contornos decorativos (no identifican
+                     ningún control, así que 1.4.11 no les aplica)
+       ink-400     · borde de controles e iconos con significado.
+                     3.19:1 sobre blanco — el mínimo de WCAG 1.4.11 es 3:1.
+                     NO alcanza para texto.
+       ink-500     · piso del texto secundario. 4.95:1 sobre blanco.
+     --------------------------------------------------------------------- */
+  --color-ink-0:   #ffffff;
+  --color-ink-50:  #f7f8fa;
+  --color-ink-100: #eef0f4;
+  --color-ink-200: #e1e5eb;
+  --color-ink-300: #cbd2dc;
+  --color-ink-400: #8592a5;
+  --color-ink-500: #647085;
+  --color-ink-600: #4b5666;
+  --color-ink-700: #363f4d;
+  --color-ink-800: #232a35;
+  --color-ink-900: #141920;
+
+  /* ---------------------------------------------------------------------
+     Color · Semántico
+     Un tono por significado. Los tonos "-fg" están verificados sobre blanco
+     y sobre su propia superficie "-soft".
+     --------------------------------------------------------------------- */
+  --color-ok-soft:   #e7f4ec;
+  --color-ok-border: #b6ddc6;
+  --color-ok:        #157347;
+  --color-ok-strong: #0f5233;
+
+  --color-warn-soft:   #fdf3e0;
+  --color-warn-border: #f0d9a8;
+  --color-warn:        #8a5a00;
+  --color-warn-strong: #6b4600;
+
+  --color-risk-soft:   #fdeceb;
+  --color-risk-border: #f4c2bf;
+  --color-risk:        #b3261e;
+  --color-risk-strong: #8c1c16;
+
+  --color-info-soft:   #eef2fb;
+  --color-info-border: #b8c7ed;
+  --color-info:        #2a4396;
+
+  /* ---------------------------------------------------------------------
+     Tipografía
+     Sin fuente web a propósito: ver la cabecera de este archivo.
+     La voz se construye con escala, peso y tracking, no con una novedad.
+     --------------------------------------------------------------------- */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono",
+               Menlo, Monaco, Consolas, monospace;
+
+  --text-2xs: 0.6875rem;   /* 11px · solo micro-etiquetas */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;      /* 12px · etiquetas y metadatos */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;    /* 13px · texto denso de tabla */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem;  /* 15px · cuerpo de interfaz */
+  --text-base--line-height: 1.5rem;
+  --text-md: 1.0625rem;    /* 17px · cuerpo destacado */
+  --text-md--line-height: 1.625rem;
+  --text-lg: 1.1875rem;    /* 19px · título de tarjeta */
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.375rem;     /* 22px · título de sección */
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.75rem;     /* 28px · título de vista */
+  --text-2xl--line-height: 2.125rem;
+  --text-3xl: 2.125rem;    /* 34px */
+  --text-3xl--line-height: 2.5rem;
+
+  /* ---------------------------------------------------------------------
+     Radios · institucional = contenido, no burbujeante
+     --------------------------------------------------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* ---------------------------------------------------------------------
+     Profundidad · desplazamiento + desenfoque suave, en dos capas.
+     Nunca un halo de color a offset cero.
+     --------------------------------------------------------------------- */
+  --shadow-e1: 0 1px 2px rgba(20, 25, 32, 0.04), 0 1px 3px rgba(20, 25, 32, 0.06);
+  --shadow-e2: 0 2px 4px rgba(20, 25, 32, 0.04), 0 4px 10px rgba(20, 25, 32, 0.08);
+  --shadow-e3: 0 4px 8px rgba(20, 25, 32, 0.05), 0 12px 28px rgba(20, 25, 32, 0.12);
+  --shadow-e4: 0 8px 16px rgba(20, 25, 32, 0.08), 0 24px 56px rgba(20, 25, 32, 0.18);
+
+  /* ---------------------------------------------------------------------
+     Movimiento · salida exponencial, un solo momento autoral
+     --------------------------------------------------------------------- */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-}
-
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
-}
-
-.dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
-}
+/* ==========================================================================
+   Base
+   ========================================================================== */
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: var(--color-ink-200);
   }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--color-ink-50);
+    color: var(--color-ink-900);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Los títulos llevan su propio peso: se aprietan un poco y equilibran el
+     salto de línea en vez de gritar con negrita. */
+  h1, h2, h3, h4, h5 {
+    font-weight: 600;
+    letter-spacing: -0.014em;
+    text-wrap: balance;
+    color: var(--color-ink-900);
+  }
+
+  h1 { letter-spacing: -0.021em; }
+
+  /* Todo dato numérico se alinea en columna. Sin esto, una tabla de cifras
+     baila en cada render. */
+  th, td, output, [data-numeral] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Un solo anillo de foco en toda la aplicación, visible sobre claro y
+     sobre el azul del encabezado. Obligación AA. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  .on-brand :focus-visible {
+    outline-color: var(--color-accent-300);
+  }
+
+  /* Nadie debería poder hacer scroll horizontal en un teléfono. */
+  body { overflow-x: hidden; }
+
+  ::placeholder { color: var(--color-ink-500); opacity: 1; }
+
+  ::selection {
+    background-color: var(--color-brand-100);
+    color: var(--color-brand-900);
+  }
+}
+
+/* ==========================================================================
+   Utilidades del sistema
+   ========================================================================== */
+
+@layer utilities {
+  /* Objetivo táctil mínimo AA (2.5.5) sin obligar a que el control se vea
+     grande: el área crece, la caja visible no. */
+  .tap-target {
+    position: relative;
+  }
+  .tap-target::after {
+    content: "";
+    position: absolute;
+    inset: 50% 50% 50% 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  /* Medida de lectura. La prosa larga no debe pasar de aquí. */
+  .measure { max-width: 68ch; }
+
+  /* Tabla que en móvil se puede arrastrar en lugar de romper la página. */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+}
+
+/* ==========================================================================
+   Movimiento
+   Un momento autoral: el contenido llega. Nada más se mueve por gusto.
+   ========================================================================== */
+
+@keyframes eg-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes eg-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes eg-scale-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Barrido, no parpadeo. Un pulso de opacidad lee como "roto"; un barrido
+   lee como "viene en camino". */
+@keyframes eg-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+.animate-rise     { animation: eg-rise 0.42s var(--ease-out-quint) both; }
+.animate-fade     { animation: eg-fade 0.28s var(--ease-out-quart) both; }
+.animate-scale-in { animation: eg-scale-in 0.24s var(--ease-out-quint) both; }
+
+/* Escalonado para listas y rejillas. Se corta a los 8 para que una tabla
+   larga no tarde una eternidad en aparecer. */
+.stagger > *              { animation: eg-rise 0.42s var(--ease-out-quint) both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 150ms; }
+.stagger > *:nth-child(6) { animation-delay: 180ms; }
+.stagger > *:nth-child(7) { animation-delay: 200ms; }
+.stagger > *:nth-child(n + 8) { animation-delay: 220ms; }
+
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-ink-100) 25%,
+    var(--color-ink-200) 37%,
+    var(--color-ink-100) 63%
+  );
+  background-size: 200% 100%;
+  animation: eg-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Reducción de movimiento: se conserva el cambio de estado y la jerarquía,
+   se quita el desplazamiento. No se mata la animación a 0.01ms — eso
+   destruye la señal de que algo cambió. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-scale-in,
+  .stagger > * {
+    animation: eg-fade 0.2s linear both;
+    animation-delay: 0ms !important;
+  }
+
+  .skeleton {
+    animation: none;
+    background: var(--color-ink-100);
+  }
+
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Impresión · las actas y reportes salen en papel institucional
+   ========================================================================== */
+
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
 }

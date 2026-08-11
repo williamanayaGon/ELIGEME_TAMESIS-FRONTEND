@@ -21,10 +21,10 @@ const SuccessModal = ({ isOpen, type, onClose, autoAssigned, assignedPatientName
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-all">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 animate-fade-in-up">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 animate-rise">
         
         {/* Encabezado del Modal */}
-        <div className={`p-6 text-center ${isPreselected ? 'bg-gradient-to-r from-blue-600 to-indigo-700' : 'bg-green-600'}`}>
+        <div className={`p-6 text-center ${isPreselected ? 'bg-brand-700' : 'bg-green-600'}`}>
           <div className="mx-auto w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-lg">
             {isPreselected ? (
               <span className="text-3xl">🎉</span> 
@@ -272,7 +272,7 @@ export default function RegistroPage() {
 
       {/* VISTA 1: SELECCIÓN DE TIPO Y REQUISITOS */}
       {step === 'REQUISITOS' && (
-        <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+        <div className="max-w-4xl mx-auto space-y-8 animate-fade">
             
             {/* Título Principal */}
             <div className="text-center mb-8">
@@ -300,14 +300,14 @@ export default function RegistroPage() {
                 {/* Opción 2: Contratista */}
                 <button 
                     onClick={() => handleApplicantTypeSelect('CONTRATISTA')}
-                    className="group bg-white p-8 rounded-2xl shadow-md hover:shadow-2xl transition-all border-2 border-transparent hover:border-purple-500 text-left"
+                    className="group bg-white p-8 rounded-2xl shadow-md hover:shadow-2xl transition-all border-2 border-transparent hover:border-accent-400 text-left"
                 >
-                    <div className="bg-purple-100 w-14 h-14 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">💼</div>
+                    <div className="bg-accent-100 w-14 h-14 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">💼</div>
                     <h3 className="text-xl font-bold text-gray-800 mb-2">Soy Profesional / Contratista</h3>
                     <p className="text-gray-500 text-sm">
                         Soy auxiliar de enfermería o cuidador externo y deseo ofrecer mis servicios a la EPS.
                     </p>
-                    <div className="mt-4 text-purple-600 font-bold text-sm flex items-center gap-1">
+                    <div className="mt-4 text-accent-800 font-bold text-sm flex items-center gap-1">
                         Ver requisitos y postular <span className="group-hover:translate-x-1 transition">→</span>
                     </div>
                 </button>
@@ -334,7 +334,7 @@ export default function RegistroPage() {
 
       {/* VISTA 2: FORMULARIO DINÁMICO */}
       {step === 'FORMULARIO' && (
-        <div className="max-w-4xl mx-auto mb-6 animate-fade-in-up">
+        <div className="max-w-4xl mx-auto mb-6 animate-rise">
              <button onClick={() => setStep('REQUISITOS')} className="text-gray-500 hover:text-blue-600 flex items-center gap-1 font-medium mb-4 transition">
                 ← Volver a selección de perfil
             </button>
@@ -342,13 +342,13 @@ export default function RegistroPage() {
             <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-xl p-8 space-y-8 relative overflow-hidden">
                 
                 {/* Indicador visual superior */}
-                <div className={`absolute top-0 left-0 w-full h-2 ${applicantType === 'FAMILIAR' ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+                <div className={`absolute top-0 left-0 w-full h-2 ${applicantType === 'FAMILIAR' ? 'bg-blue-500' : 'bg-accent-500'}`}></div>
                 
                 <div className="flex justify-between items-center border-b pb-4">
                     <h2 className="text-2xl font-bold text-gray-800">
                         Registro: {applicantType === 'FAMILIAR' ? 'Cuidador Familiar' : 'Profesional Externo'}
                     </h2>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${applicantType === 'FAMILIAR' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${applicantType === 'FAMILIAR' ? 'bg-blue-100 text-blue-700' : 'bg-accent-100 text-accent-800'}`}>
                         {applicantType}
                     </span>
                 </div>
@@ -374,7 +374,7 @@ export default function RegistroPage() {
 
                 {/* 2. DATOS DEL POSTULANTE (Común para ambos) */}
                 <section>
-                    <h3 className="text-lg font-bold text-gray-800 mb-4 border-l-4 border-gray-500 pl-3">Datos Personales</h3>
+                    <h3 className="text-lg font-semibold text-ink-900 mb-4 pb-2 border-b border-ink-200">Datos personales</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase">Nombre Completo *</label>
@@ -444,8 +444,8 @@ export default function RegistroPage() {
 
                 {/* 4. INFORMACIÓN DEL PACIENTE (SOLO SI ES FAMILIAR) */}
                 {applicantType === 'FAMILIAR' && (
-                    <section className="animate-fade-in">
-                        <h3 className="text-lg font-bold text-blue-800 mb-4 border-l-4 border-blue-500 pl-3">Información del Paciente</h3>
+                    <section className="animate-fade">
+                        <h3 className="text-lg font-semibold text-ink-900 mb-4 pb-2 border-b border-ink-200">Información del paciente</h3>
                         <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase">Nombre del Paciente *</label>
@@ -498,7 +498,7 @@ export default function RegistroPage() {
                                 </label>
 
                                 {formData.requiresHomeCare && formData.isDisabled && (
-                                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2 animate-fade-in">
+                                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2 animate-fade">
                                         <span className="text-lg leading-none">⚡</span>
                                         <p className="text-xs text-green-800">
                                             <strong>Asignación automática habilitada.</strong> Si el documento que ingresaste
@@ -579,10 +579,10 @@ export default function RegistroPage() {
 
                         {/* DOCUMENTOS SOLO PARA CONTRATISTAS */}
                         {applicantType === 'CONTRATISTA' && (
-                            <div className="col-span-1 md:col-span-2 bg-purple-50 p-4 rounded border border-purple-100">
-                                <label className="block text-xs font-bold text-purple-700 mb-1">Hoja de Vida / Soportes de Experiencia *</label>
-                                <input type="file" required accept=".pdf,.jpg,.png" onChange={(e) => handleFileChange(e, 'docCv')} className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 cursor-pointer" />
-                                <p className="text-xs text-purple-500 mt-1">Sube un único archivo PDF con tu HV y certificados laborales.</p>
+                            <div className="col-span-1 md:col-span-2 bg-accent-50 p-4 rounded border border-accent-200">
+                                <label className="block text-xs font-bold text-accent-800 mb-1">Hoja de Vida / Soportes de Experiencia *</label>
+                                <input type="file" required accept=".pdf,.jpg,.png" onChange={(e) => handleFileChange(e, 'docCv')} className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-accent-100 file:text-accent-800 hover:file:bg-accent-200 cursor-pointer" />
+                                <p className="text-xs text-accent-800 mt-1">Sube un único archivo PDF con tu HV y certificados laborales.</p>
                             </div>
                         )}
 
@@ -612,7 +612,7 @@ export default function RegistroPage() {
                 <button 
                     type="submit" 
                     disabled={loading}
-                    className={`w-full py-4 text-white rounded-xl font-bold shadow-lg transition transform hover:-translate-y-1 disabled:bg-gray-400 disabled:cursor-not-allowed ${applicantType === 'FAMILIAR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                    className={`w-full py-4 text-white rounded-xl font-bold shadow-lg transition transform hover:-translate-y-1 disabled:bg-gray-400 disabled:cursor-not-allowed ${applicantType === 'FAMILIAR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-brand-700 hover:bg-brand-800'}`}
                 >
                     {loading ? 'Enviando Documentación...' : 'RADICAR POSTULACIÓN'}
                 </button>

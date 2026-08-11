@@ -40,7 +40,7 @@ export default function CaregiverModal({ onClose }) {
         const errorData = await res.json();
         alert("❌ Error: " + errorData.error);
       }
-    } catch (error) {
+    } catch {
       alert("Error de conexión");
     } finally {
       setLoading(false);
@@ -49,7 +49,7 @@ export default function CaregiverModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-      <div className="bg-[#111] border border-gray-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-fade-in-up">
+      <div className="bg-[#111] border border-gray-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-rise">
         
         {/* LADO IZQUIERDO: REQUISITOS (Azul oscuro) */}
         <div className="w-full md:w-1/3 bg-blue-900/20 p-6 border-r border-gray-700 flex flex-col justify-center">

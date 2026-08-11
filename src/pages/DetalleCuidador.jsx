@@ -53,7 +53,7 @@ export default function DetalleCuidador() {
                     </div>
 
                     <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
-                         <h2 className="text-xl font-bold mb-4 text-purple-700 border-b pb-2">Documentación</h2>
+                         <h2 className="text-xl font-semibold mb-4 text-brand-700 border-b border-ink-200 pb-2">Documentación</h2>
                          <p className="text-sm text-gray-600 mb-4">Hoja de vida y certificados adjuntos.</p>
                          
                          {certificadoUrl ? (

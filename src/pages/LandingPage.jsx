@@ -1,25 +1,41 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { MdLogin, MdKey, MdHowToReg, MdArrowForward } from 'react-icons/md';
+
+import { Modal, Button, Field } from '../components/ui';
+
+/**
+ * Portada y acceso.
+ *
+ * Antes esta pantalla pedía dos archivos que no existen en `public/`:
+ * `/fondo.mp4` y `/bee.png`. En producción eran dos 404 — un video que
+ * nunca cargaba y la ilustración del héroe rota.
+ *
+ * El fondo ahora se compone con los colores de la marca y no pesa nada,
+ * que es además lo correcto para el usuario que abre esto desde un
+ * teléfono de gama media con señal intermitente. Si aparecen los archivos
+ * reales, se vuelven a enganchar aquí.
+ */
 
 export default function LandingPage({ onLoginSuccess }) {
   const navigate = useNavigate();
 
-  // Estados
   const [modalType, setModalType] = useState(null);
   const [email, setEmail] = useState('');
   const [credential, setCredential] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
-  // Lógica de Login
+  const esCodigo = modalType === 'LOGIN_CODE';
+
   const handleLogin = async (e) => {
     e.preventDefault();
-    const type = modalType === 'LOGIN_CODE' ? 'CODE' : 'PASSWORD';
-
+    setEnviando(true);
     try {
-     const res = await fetch(import.meta.env.VITE_API_URL + '/api/login', {
+      const res = await fetch(import.meta.env.VITE_API_URL + '/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, credential, type }) 
+        body: JSON.stringify({ email, credential, type: esCodigo ? 'CODE' : 'PASSWORD' })
       });
 
       const data = await res.json();
@@ -28,162 +44,186 @@ export default function LandingPage({ onLoginSuccess }) {
         // El backend responde { token, user }: se separan antes de guardar.
         onLoginSuccess(data.user, data.token);
       } else {
-        toast.error(data.error || 'Error de credenciales');
+        toast.error(data.error || 'Correo o contraseña incorrectos.');
       }
     } catch {
-      toast.error('Error de conexión con el servidor');
+      toast.error('No se pudo conectar con el servidor. Revisa tu conexión.');
+    } finally {
+      setEnviando(false);
     }
   };
 
+  const cerrar = () => {
+    setModalType(null);
+    setCredential('');
+  };
+
   return (
-    <div className="min-h-screen flex flex-col text-gray-800 relative overflow-hidden bg-white">
+    <div className="min-h-screen flex flex-col bg-ink-50">
 
-      {/* ============================================================ */}
-      {/* CAPA 1: VIDEO DE FONDO                                       */}
-      {/* ============================================================ */}
-      <div className="absolute inset-0 z-0 w-full h-full overflow-hidden">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute top-0 left-0 w-full h-full object-cover"
-        >
-          <source src="/fondo.mp4" type="video/mp4" />
-        </video>
-
-        <div className="absolute inset-0 bg-white/15 backdrop-blur-[1px]"></div>
+      {/* Fondo compuesto: dos halos suaves sobre el azul institucional.
+          Cero peticiones de red. */}
+      <div aria-hidden="true" className="fixed inset-0 -z-10 bg-brand-900">
+        <div
+          className="absolute inset-0 opacity-70"
+          style={{
+            backgroundImage:
+              'radial-gradient(60rem 40rem at 15% 10%, #1f3c88 0%, transparent 60%),' +
+              'radial-gradient(45rem 35rem at 85% 90%, #2a4396 0%, transparent 55%)'
+          }}
+        />
+        <div
+          className="absolute inset-0 opacity-25"
+          style={{
+            backgroundImage:
+              'radial-gradient(30rem 24rem at 78% 18%, #ecb51f 0%, transparent 62%)'
+          }}
+        />
       </div>
 
+      <div className="relative flex flex-col min-h-screen on-brand">
 
-      {/* ============================================================ */}
-      {/* CAPA 2: CONTENIDO PRINCIPAL                                  */}
-      {/* ============================================================ */}
-      <div className="relative z-10 flex flex-col min-h-screen">
-
-        {/* --- NAVBAR --- */}
-        <nav className="w-full pt-6 pb-2">
-          <div className="max-w-7xl mx-auto px-10 flex justify-between items-center">
-            
-            <div className="flex items-center gap-4">
-              <img src="/bee.png" alt="" className="h-14 w-auto drop-shadow-md" />
-              <span className="text-2xl font-extrabold text-[#1f3c88] tracking-tight drop-shadow-sm">
+        <nav className="w-full">
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img
+                src="/logo.png"
+                alt=""
+                width="44"
+                height="44"
+                className="h-11 w-11 object-contain rounded-md bg-white/95 p-1"
+              />
+              <span className="text-xl font-semibold tracking-tight text-white">
                 ELÍGEME
               </span>
             </div>
 
-            <button
+            <Button
+              variant="accent"
+              icon={<MdLogin />}
               onClick={() => setModalType('LOGIN_PASSWORD')}
-              className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black px-6 py-3 rounded-full font-bold transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
               Iniciar sesión
-            </button>
+            </Button>
           </div>
         </nav>
 
-        {/* --- HERO SECTION --- */}
-        <main className="relative flex-1 flex flex-col md:flex-row items-center justify-between gap-20 px-12 md:px-28 py-16">
-          
-          {/* Columna Izquierda: Textos */}
-          <div className="relative max-w-2xl z-10">
-            <h1 className="text-6xl md:text-7xl font-extrabold text-[#1f3c88] mb-8 leading-tight drop-shadow-md">
-              ¡ELÍGEME!
-            </h1>
+        <main className="flex-1 flex items-center">
+          <div className="max-w-6xl mx-auto w-full px-5 sm:px-8 py-12 sm:py-20">
+            <div className="max-w-2xl">
+              <h1 className="text-3xl sm:text-[2.75rem] font-semibold leading-[1.1] tracking-tight text-white">
+                Cuidado domiciliario de Támesis
+              </h1>
 
-            <p className="text-2xl text-gray-900 mb-6 leading-relaxed font-bold">
-              Plataforma de la Superintendencia para la gestión y supervisión del cuidado.
-            </p>
+              <p className="mt-5 text-md sm:text-lg text-brand-100 leading-relaxed measure">
+                Plataforma de gestión y supervisión del cuidado en casa: del registro
+                del cuidador hasta la rendición de cuentas ante los entes de control.
+              </p>
 
-            <p className="text-gray-900 mb-14 text-lg leading-relaxed max-w-xl font-semibold">
-              Sistema institucional que permite gestionar de forma integral los procesos
-              relacionados con el cuidado, desde el registro hasta la supervisión normativa.
-            </p>
+              <p className="mt-4 text-sm text-brand-200 measure">
+                Cada cifra que aparece en esta plataforma sale de un registro hecho
+                por alguien. Donde no hay dato, lo dice.
+              </p>
 
-            <div className="flex flex-col sm:flex-row gap-6">
-              <button
-                onClick={() => setModalType('LOGIN_CODE')}
-                className="flex items-center gap-3 bg-yellow-500 hover:bg-yellow-600 text-black px-10 py-5 rounded-full font-bold shadow-xl hover:shadow-2xl transition transform hover:-translate-y-1"
-              >
-                Ya tengo un Código / Soy EPS
-              </button>
+              <div className="mt-9 flex flex-col sm:flex-row gap-3">
+                <Button
+                  variant="accent"
+                  size="lg"
+                  icon={<MdKey />}
+                  onClick={() => setModalType('LOGIN_CODE')}
+                >
+                  Tengo un código de acceso
+                </Button>
 
-              <button
-                onClick={() => navigate('/registro')}
-                className="flex items-center gap-3 bg-white/90 border-2 border-yellow-500 text-yellow-700 hover:bg-yellow-50 px-10 py-5 rounded-full font-bold shadow-lg hover:shadow-xl transition transform hover:-translate-y-1 backdrop-blur-sm"
-              >
-                Quiero postularme
-              </button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  icon={<MdHowToReg />}
+                  iconRight={<MdArrowForward />}
+                  onClick={() => navigate('/registro')}
+                  className="bg-white/10 text-white border-white/30 hover:bg-white/15 hover:border-white/50 shadow-none"
+                >
+                  Quiero postularme como cuidador
+                </Button>
+              </div>
             </div>
-          </div>
-
-          {/* Columna Derecha: Imagen Decorativa (SIN RECUADRO BLANCO) */}
-          <div className="relative max-w-sm z-10 hidden md:block">
-            {/* Se eliminó el div absoluto con bg-white/40 para mostrar la transparencia real */}
-            <img
-              src="/bee.png"
-              alt=""
-              className="relative w-full h-auto drop-shadow-[0_20px_50px_rgba(0,0,0,0.3)] animate-float"
-            />
           </div>
         </main>
 
-        {/* --- FOOTER --- */}
-        <footer className="py-6 text-center text-gray-700 font-bold text-sm">
-          © 2026 Eligeme S.A.S
+        <footer className="border-t border-white/10">
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-brand-200">
+              Alcaldía de Támesis, Antioquia · en articulación con el hospital municipal
+            </p>
+            <p className="text-xs text-brand-200">© 2026 Elígeme S.A.S.</p>
+          </div>
         </footer>
       </div>
 
-      {/* MODAL LOGIN */}
-      {modalType && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md relative border border-gray-100">
-            <button
-              onClick={() => setModalType(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 font-bold text-xl"
-            >
-              ✕
-            </button>
-            <h2 className="text-2xl font-bold mb-2 text-center text-[#1f3c88]">
-              {modalType === 'LOGIN_CODE' ? 'Acceso con Código' : 'Inicio de Sesión'}
-            </h2>
-            <p className="text-center text-sm text-gray-500 mb-8">
-              Ingresa tus credenciales para continuar.
-            </p>
-            <form onSubmit={handleLogin} className="space-y-4">
+      <Modal
+        open={Boolean(modalType)}
+        onClose={cerrar}
+        size="sm"
+        icon={esCodigo ? <MdKey /> : <MdLogin />}
+        title={esCodigo ? 'Acceso con código' : 'Iniciar sesión'}
+        subtitle={esCodigo
+          ? 'Ingresa el código de seis dígitos que recibiste por correo.'
+          : 'Ingresa con tu correo institucional y contraseña.'}
+        footer={
+          <>
+            <Button variant="secondary" onClick={cerrar}>Cancelar</Button>
+            <Button variant="primary" type="submit" form="form-login" loading={enviando}>
+              Entrar
+            </Button>
+          </>
+        }
+      >
+        <form id="form-login" onSubmit={handleLogin} className="space-y-5">
+          <Field label="Correo electrónico" required>
+            {(p) => (
               <input
+                {...p}
                 type="email"
-                required
-                placeholder="Correo electrónico"
-                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-gray-50 text-gray-900"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="nombre@correo.com"
               />
+            )}
+          </Field>
+
+          <Field
+            label={esCodigo ? 'Código de acceso' : 'Contraseña'}
+            required
+            hint={esCodigo ? 'Son seis dígitos.' : undefined}
+          >
+            {(p) => (
               <input
+                {...p}
                 type="password"
-                required
-                placeholder={modalType === 'LOGIN_CODE' ? 'Código de 6 dígitos' : 'Contraseña'}
-                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-gray-50 tracking-widest text-gray-900"
+                inputMode={esCodigo ? 'numeric' : undefined}
+                autoComplete={esCodigo ? 'one-time-code' : 'current-password'}
                 value={credential}
                 onChange={(e) => setCredential(e.target.value)}
+                className={`${p.className} ${esCodigo ? 'tracking-[0.3em]' : ''}`}
               />
-              <button className="w-full bg-[#1f3c88] text-white font-bold py-4 rounded-xl hover:bg-[#162c63] transition shadow-lg">
-                Ingresar
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+            )}
+          </Field>
 
-      {/* Estilos para la animación de flotado */}
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-20px); }
-        }
-        .animate-float {
-          animation: float 4s ease-in-out infinite;
-        }
-      `}</style>
+          {!esCodigo && (
+            <p className="text-sm text-ink-600">
+              ¿Recibiste un código en vez de contraseña?{' '}
+              <button
+                type="button"
+                onClick={() => { setModalType('LOGIN_CODE'); setCredential(''); }}
+                className="font-medium text-brand-700 underline underline-offset-2 hover:text-brand-800"
+              >
+                Entra con tu código
+              </button>
+            </p>
+          )}
+        </form>
+      </Modal>
     </div>
   );
 }

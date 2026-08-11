@@ -32,7 +32,7 @@ const COLOR_ESTADO = {
 
 // Un solo tono: la gráfica lleva una sola serie, así que el color codifica
 // magnitud, no identidad. Validado para contraste sobre fondo claro.
-const AZUL = '#6366F1';
+const AZUL = '#2a4396'; // brand-600
 
 const money = (n) => new Intl.NumberFormat('es-CO', {
   style: 'currency', currency: 'COP', maximumFractionDigits: 0
@@ -283,7 +283,7 @@ export default function ReportesFinancieros({ user }) {
   // ===============================================================
   if (vista === 'LISTA') {
     return (
-      <div className="animate-fadeIn space-y-5">
+      <div className="animate-fade space-y-5">
         <div className="flex flex-wrap justify-between items-center gap-3">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Reportes financieros</h2>
@@ -394,7 +394,7 @@ export default function ReportesFinancieros({ user }) {
   // ===============================================================
   if (vista === 'FORMULARIO') {
     return (
-      <form onSubmit={guardar} className="animate-fadeIn space-y-5">
+      <form onSubmit={guardar} className="animate-fade space-y-5">
         <button type="button" onClick={() => setVista('LISTA')}
           className="text-gray-500 hover:text-blue-600 flex items-center gap-1 font-medium">
           <MdArrowBack /> Volver a la lista
@@ -604,7 +604,7 @@ export default function ReportesFinancieros({ user }) {
     const bloqueado = detalle.estado !== 'BORRADOR';
 
     return (
-      <div className="animate-fadeIn space-y-5">
+      <div className="animate-fade space-y-5">
         <button onClick={() => { setVista('LISTA'); cargar(); }}
           className="text-gray-500 hover:text-blue-600 flex items-center gap-1 font-medium">
           <MdArrowBack /> Volver a la lista
@@ -664,7 +664,7 @@ export default function ReportesFinancieros({ user }) {
             </div>
             <div className="bg-white p-4">
               <p className="text-xs text-gray-500 uppercase font-bold">Ejecutado</p>
-              <p className="text-xl font-bold text-indigo-600">{money(total)}</p>
+              <p className="text-xl font-bold text-brand-700">{money(total)}</p>
             </div>
             <div className="bg-white p-4">
               <p className="text-xs text-gray-500 uppercase font-bold">Saldo</p>
