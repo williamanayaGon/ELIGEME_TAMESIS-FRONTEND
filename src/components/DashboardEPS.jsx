@@ -572,7 +572,19 @@ export default function DashboardEPS({ user, onLogout }) {
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
-        toast.success(`Estado actualizado a ${newStatus.toLowerCase()}.`);
+        const data = await res.json().catch(() => ({}));
+        // El código del cuidador se guarda hasheado: si el correo no salió,
+        // esta es la única vez que se puede ver. Después no hay forma de
+        // recuperarlo y esa persona no podría entrar nunca.
+        if (data.correoEnviado === false && data.codigoParaEntregar) {
+          toast.warning(
+            `Estado actualizado a ${newStatus.toLowerCase()}, pero el correo no salió. ` +
+            `Su código de acceso es ${data.codigoParaEntregar}. Entrégaselo en persona: no se volverá a mostrar.`,
+            { duration: Infinity, closeButton: true }
+          );
+        } else {
+          toast.success(`Estado actualizado a ${newStatus.toLowerCase()}.`);
+        }
         setSelectedCandidate(null);
         fetchData({ silent: true });
       } else {
