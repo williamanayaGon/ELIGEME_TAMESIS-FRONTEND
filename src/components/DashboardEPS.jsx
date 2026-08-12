@@ -632,7 +632,18 @@ export default function DashboardEPS({ user, onLogout }) {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success('Paciente registrado. Se le envió su código de acceso al correo.');
+        // Antes esto afirmaba siempre que el correo salió. Cuando no salía, el
+        // paciente quedaba creado con un código que nadie conocía y el acceso
+        // fallaba para siempre sin que nadie supiera por qué.
+        if (data.correoEnviado === false) {
+          toast.warning(
+            `Paciente registrado, pero el correo a ${newPatientData.email} no salió. ` +
+            `Su código de acceso es ${data.codigoParaEntregar}. Entrégaselo en persona: no se volverá a mostrar.`,
+            { duration: Infinity, closeButton: true }
+          );
+        } else {
+          toast.success('Paciente registrado. Se le envió su código de acceso al correo.');
+        }
         setShowPatientForm(false);
         setNewPatientData({
           fullName: '', identification: '', email: '', age: '', stratum: '', diagnosis: '',
