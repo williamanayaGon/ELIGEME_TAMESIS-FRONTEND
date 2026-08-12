@@ -25,12 +25,22 @@ export default function LandingPage({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
   const [credential, setCredential] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [errorCredenciales, setErrorCredenciales] = useState(null);
 
   const esCodigo = modalType === 'LOGIN_CODE';
+
+  // Cambiar de puerta limpia el error y la credencial escrita: un código
+  // de seis dígitos no sirve como contraseña ni al revés.
+  const cambiarModo = (modo) => {
+    setModalType(modo);
+    setCredential('');
+    setErrorCredenciales(null);
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setEnviando(true);
+    setErrorCredenciales(null);
     try {
       const res = await fetch(import.meta.env.VITE_API_URL + '/api/login', {
         method: 'POST',
@@ -38,13 +48,28 @@ export default function LandingPage({ onLoginSuccess }) {
         body: JSON.stringify({ email, credential, type: esCodigo ? 'CODE' : 'PASSWORD' })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
         // El backend responde { token, user }: se separan antes de guardar.
         onLoginSuccess(data.user, data.token);
+        return;
+      }
+
+      // El error nombra el problema Y la salida. Un 401 aquí casi siempre
+      // es haber entrado por la puerta equivocada: quien tiene código de
+      // seis dígitos no se valida contra la contraseña, y viceversa. Antes
+      // el mensaje decía "contraseña" incluso en el modo de código.
+      if (res.status === 429) {
+        toast.error('Demasiados intentos seguidos. Espera un momento antes de volver a probar.');
+      } else if (res.status === 401 || res.status === 400) {
+        setErrorCredenciales(
+          esCodigo
+            ? 'El correo o el código no coinciden. Revisa el código de seis dígitos que te llegó por correo.'
+            : 'El correo o la contraseña no coinciden.'
+        );
       } else {
-        toast.error(data.error || 'Correo o contraseña incorrectos.');
+        toast.error(data.error || 'No se pudo iniciar sesión. Intenta de nuevo.');
       }
     } catch {
       toast.error('No se pudo conectar con el servidor. Revisa tu conexión.');
@@ -56,6 +81,7 @@ export default function LandingPage({ onLoginSuccess }) {
   const cerrar = () => {
     setModalType(null);
     setCredential('');
+    setErrorCredenciales(null);
   };
 
   // El color de fondo va en el contenedor raíz, no en una capa aparte.
@@ -192,6 +218,7 @@ export default function LandingPage({ onLoginSuccess }) {
             label={esCodigo ? 'Código de acceso' : 'Contraseña'}
             required
             hint={esCodigo ? 'Son seis dígitos.' : undefined}
+            error={errorCredenciales}
           >
             {(p) => (
               <input
@@ -206,12 +233,29 @@ export default function LandingPage({ onLoginSuccess }) {
             )}
           </Field>
 
-          {!esCodigo && (
+          {/* Salida concreta cuando el acceso falla: casi siempre es haber
+              entrado por la puerta equivocada. */}
+          {errorCredenciales && (
+            <p className="text-sm text-ink-700 rounded-md border border-ink-200 bg-ink-50 px-3.5 py-3">
+              {esCodigo
+                ? '¿Tu cuenta usa contraseña en vez de código? '
+                : '¿Recibiste un código de seis dígitos por correo? '}
+              <button
+                type="button"
+                onClick={() => cambiarModo(esCodigo ? 'LOGIN_PASSWORD' : 'LOGIN_CODE')}
+                className="font-medium text-brand-700 underline underline-offset-2 hover:text-brand-800"
+              >
+                {esCodigo ? 'Entrar con contraseña' : 'Entrar con tu código'}
+              </button>
+            </p>
+          )}
+
+          {!esCodigo && !errorCredenciales && (
             <p className="text-sm text-ink-600">
               ¿Recibiste un código en vez de contraseña?{' '}
               <button
                 type="button"
-                onClick={() => { setModalType('LOGIN_CODE'); setCredential(''); }}
+                onClick={() => cambiarModo('LOGIN_CODE')}
                 className="font-medium text-brand-700 underline underline-offset-2 hover:text-brand-800"
               >
                 Entra con tu código
